@@ -1053,48 +1053,18 @@ func _local_ghost():
 	return _find_ghost_by_id(local_player_id)
 
 func _reconcile_local_pac(last_seq: int) -> void:
-	var p = _local_pac()
-	if p == null or not p.active:
-		return
 	var remaining: Array = []
 	for inp in pending_inputs:
 		if int(inp.get("seq", 0)) > last_seq and str(inp.get("kind", "")) == "pac":
 			remaining.append(inp)
 	pending_inputs = remaining
-	for inp in remaining:
-		var dt := float(inp.get("time", last_snapshot_time)) - last_snapshot_time
-		if dt > 0.0:
-			p.update_pac(dt)
-		var dir_name := str(inp.get("dir", ""))
-		if Config.DIRS.has(dir_name):
-			p.desired = Config.DIRS[dir_name]
-			p.update_pac(0.0)
-		last_snapshot_time = float(inp.get("time", last_snapshot_time))
-	var dt2 := time - last_snapshot_time
-	if dt2 > 0.0:
-		p.update_pac(dt2)
 
 func _reconcile_local_ghost(last_seq: int) -> void:
-	var g = _local_ghost()
-	if g == null:
-		return
 	var remaining: Array = []
 	for inp in pending_inputs:
 		if int(inp.get("seq", 0)) > last_seq and str(inp.get("kind", "")) == "ghost":
 			remaining.append(inp)
 	pending_inputs = remaining
-	for inp in remaining:
-		var dt := float(inp.get("time", last_snapshot_time)) - last_snapshot_time
-		if dt > 0.0:
-			g.update_ghost(dt)
-		var dir_name := str(inp.get("dir", ""))
-		if Config.DIRS.has(dir_name):
-			g.desired_dir = Config.DIRS[dir_name]
-			g.update_ghost(0.0)
-		last_snapshot_time = float(inp.get("time", last_snapshot_time))
-	var dt2 := time - last_snapshot_time
-	if dt2 > 0.0:
-		g.update_ghost(dt2)
 
 # -------------------------------------------------------------------- effect
 func popup(x: float, y: float, text: String, color: Color, size := 8) -> void:
@@ -1797,6 +1767,10 @@ func _apply_snapshot(data: Dictionary) -> void:
 			continue
 		if p == _local_pac():
 			local_pac_seq = int(e.get("seq", 0))
+			p.color_id = str(e.get("c", p.color_id))
+			p.score = int(e.get("sc", p.score))
+			p.lives = int(e.get("lv", p.lives))
+			continue
 		p.color_id = str(e.get("c", p.color_id))
 		p.score = int(e.get("sc", p.score))
 		p.lives = int(e.get("lv", p.lives))
@@ -1814,6 +1788,19 @@ func _apply_snapshot(data: Dictionary) -> void:
 			continue
 		if g == _local_ghost():
 			local_ghost_seq = int(e.get("seq", 0))
+			g.score = int(e.get("sc", g.score))
+			var st := str(e.get("st", "normal"))
+			if st in ["eaten", "dead", "house"]:
+				g.apply_network(
+					Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
+					str(e.get("d", "")),
+					float(e.get("p", 0.0)),
+					st,
+					bool(int(e.get("fr", 0))),
+					float(e.get("an", 0.0)),
+					bool(int(e.get("vis", 1))),
+					str(e.get("pid", "")))
+			continue
 		g.score = int(e.get("sc", g.score))
 		g.apply_network(
 			Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
