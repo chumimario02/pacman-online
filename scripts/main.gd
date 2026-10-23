@@ -1152,90 +1152,100 @@ func _on_net_error(text: String) -> void:
 	if lobby:
 		lobby.set_status(text, Config.RED)
 
+func _next_free_color(used: Dictionary) -> String:
+	for c in Config.PAC_COLOR_ORDER:
+		if not used.has(c):
+			return str(c)
+	return Config.PAC_COLOR_ORDER[0]
+
+func _next_free_ghost_name(used: Dictionary) -> String:
+	for n in Config.GHOST_ORDER:
+		if not used.has(n):
+			return str(n)
+	return Config.GHOST_ORDER[0]
+
 func build_start_payload() -> Dictionary:
 	var players: Array = []
 	if lobby != null and lobby.room is Dictionary:
 		players = lobby.room.get("players", [])
-	var mode_now := str(lobby.selected_mode) if lobby else MODE_TEAM
-	var pac_slots := 4
-	if mode_now == MODE_GHOST:
-		pac_slots = int(lobby.selected_pac_count)
-	pac_slots = clampi(pac_slots, 1, 4)
+
+	var human_pacs: Array = []
+	var human_ghosts: Array = []
+	for p in players:
+		if str(p.get("role", "pac")) == "ghost":
+			human_ghosts.append(p)
+		else:
+			human_pacs.append(p)
+
+	var requested_bots := int(lobby.selected_bots) if lobby != null else 2
+	var free_pac_slots := maxi(0, 4 - human_pacs.size())
+	var bot_count := clampi(requested_bots, 0, free_pac_slots)
+	if human_pacs.size() + bot_count < 1:
+		return {}
 
 	var used_colors: Dictionary = {}
 	var roster_out: Array = []
-	var player_index := 0
-
-	for i in range(pac_slots):
-		var entry: Dictionary = {}
-		if player_index < players.size():
-			var pl: Dictionary = players[player_index]
-			entry = {
-				"id": str(pl.get("id", "p_%d" % i)),
-				"name": str(pl.get("name", "JUGADOR")),
-				"color": str(pl.get("color", "yellow")),
-				"role": "pac",
-				"pac_index": i,
-				"ai": false,
-				"connected": true,
-			}
-			player_index += 1
-		else:
-			entry = {
-				"id": "ai_pac_%d" % i,
-				"name": "CPU %d" % (i + 1),
-				"color": "",
-				"role": "pac",
-				"pac_index": i,
-				"ai": true,
-				"connected": true,
-			}
-		var chosen := str(entry["color"])
-		if chosen == "" or used_colors.has(chosen):
-			chosen = ""
-			for c in Config.PAC_COLOR_ORDER:
-				if not used_colors.has(c):
-					chosen = c
-					break
-		if chosen == "":
-			chosen = Config.PAC_COLOR_ORDER[0]
+	for i in range(human_pacs.size()):
+		var pl: Dictionary = human_pacs[i]
+		var chosen := str(pl.get("color", "yellow"))
+		if used_colors.has(chosen):
+			chosen = _next_free_color(used_colors)
 		used_colors[chosen] = true
-		entry["color"] = chosen
-		roster_out.append(entry)
+		roster_out.append({
+			"id": str(pl.get("id", "p_%d" % i)),
+			"name": str(pl.get("name", "JUGADOR")),
+			"color": chosen,
+			"role": "pac",
+			"pac_index": i,
+			"ai": false,
+			"connected": true,
+		})
 
-	for n in GHOST_NAMES:
-		var entry: Dictionary
-		if player_index < players.size():
-			var pl: Dictionary = players[player_index]
-			entry = {
-				"id": str(pl.get("id", "g_" + n)),
-				"name": str(pl.get("name", "JUGADOR")),
-				"role": "ghost",
-				"ghost_name": n,
-				"ai": false,
-				"connected": true,
-			}
-			player_index += 1
-		else:
-			entry = {
-				"id": "ai_ghost_" + n,
-				"name": n.to_upper(),
-				"role": "ghost",
-				"ghost_name": n,
-				"ai": true,
-				"connected": true,
-			}
-		roster_out.append(entry)
+	for j in range(bot_count):
+		var idx := human_pacs.size() + j
+		var chosen := _next_free_color(used_colors)
+		used_colors[chosen] = true
+		roster_out.append({
+			"id": "ai_pac_%d" % idx,
+			"name": "CPU %d" % (idx + 1),
+			"color": chosen,
+			"role": "pac",
+			"pac_index": idx,
+			"ai": true,
+			"connected": true,
+		})
 
+	var used_ghosts: Dictionary = {}
+	for pl in human_ghosts:
+		var gn := str(pl.get("ghost_name", "blinky"))
+		if not Config.GHOST_ORDER.has(gn) or used_ghosts.has(gn):
+			gn = _next_free_ghost_name(used_ghosts)
+		used_ghosts[gn] = true
+		roster_out.append({
+			"id": str(pl.get("id", "g_" + gn)),
+			"name": str(pl.get("name", "JUGADOR")),
+			"role": "ghost",
+			"ghost_name": gn,
+			"ai": false,
+			"connected": true,
+		})
+
+	var pac_count := human_pacs.size() + bot_count
+	var mode_now := MODE_TEAM if pac_count >= 4 and human_ghosts.is_empty() else MODE_GHOST
 	return {
 		"mode": mode_now,
-		"pac_count": pac_slots,
+		"pac_count": pac_count,
+		"bots": bot_count,
 		"roster": roster_out,
 		"seed": randi(),
 	}
 
 func start_host_game() -> void:
 	var payload := build_start_payload()
+	if payload.is_empty():
+		if lobby:
+			lobby.set_status("FALTA UN PAC-MAN. AGREGA UN BOT O CAMBIA DE ROL.", Config.RED)
+		return
 	if net == null or not net.send_dict({"type": "start", "data": payload}):
 		if lobby:
 			lobby.set_status("NO HAY CONEXIÓN CON EL SERVIDOR", Config.RED)
@@ -1282,6 +1292,8 @@ func _restart_online() -> void:
 	if online_role != "host":
 		return
 	var data := build_start_payload()
+	if data.is_empty():
+		return
 	net.send_dict({"type": "start", "data": data})
 	_begin_online(data, true)
 
@@ -1608,19 +1620,18 @@ func _run_online_smoke() -> void:
 	_smoke_check(state == Config.PLAYING, "client applies snapshot state")
 	_smoke_check(pacs[0].tile == Vector2i(int(snap["pa"][0]["x"]), int(snap["pa"][0]["y"])), "client applies pac tile")
 
-	# Roster de fantasmas: 2 pacmen, 2 jugadores fantasma, IA rellenando.
+	# Sala personalizada: 2 Pac-Men humanos y 2 fantasmas humanos, sin bots.
 	if lobby != null:
 		lobby.room = {
 			"code": "TEST", "hostId": "p_host",
 			"players": [
-				{"id": "p_host", "name": "HOST", "color": "yellow"},
-				{"id": "p_guest", "name": "GUEST", "color": "blue"},
-				{"id": "p_g1", "name": "G1", "color": "green"},
-				{"id": "p_g2", "name": "G2", "color": "pink"},
+				{"id": "p_host", "name": "HOST", "color": "yellow", "role": "pac"},
+				{"id": "p_guest", "name": "GUEST", "color": "blue", "role": "pac"},
+				{"id": "p_g1", "name": "G1", "color": "green", "role": "ghost", "ghost_name": "blinky"},
+				{"id": "p_g2", "name": "G2", "color": "pink", "role": "ghost", "ghost_name": "pinky"},
 			],
 		}
-		lobby.selected_mode = "ghost"
-		lobby.selected_pac_count = 2
+		lobby.selected_bots = 0
 		var gp := build_start_payload()
 		var pacs_count := 0
 		var ghosts_count := 0
@@ -1634,14 +1645,37 @@ func _run_online_smoke() -> void:
 				colors[e["color"]] = true
 			else:
 				ghosts_count += 1
-		_smoke_check(pacs_count == 2, "ghost mode has 2 pacmen")
-		_smoke_check(ghosts_count == 4, "ghost mode has 4 ghost slots")
+		_smoke_check(pacs_count == 2, "custom room has 2 human pacmen")
+		_smoke_check(ghosts_count == 2, "custom room has 2 human ghosts")
+		_smoke_check(gp["bots"] == 0, "zero bots respected")
+		_smoke_check(gp["mode"] == MODE_GHOST, "custom room uses ghost mode")
 		_smoke_check(not dup, "pacman colors are unique")
 		var ghost_players := 0
 		for e in gp["roster"]:
 			if e["role"] == "ghost" and not e["ai"]:
 				ghost_players += 1
 		_smoke_check(ghost_players == 2, "two human ghost players assigned")
+
+		lobby.selected_bots = 2
+		var gp_bots := build_start_payload()
+		var bot_pacs := 0
+		for e in gp_bots["roster"]:
+			if e["role"] == "pac" and e["ai"]:
+				bot_pacs += 1
+		_smoke_check(bot_pacs == 2, "two CPU pacmen added")
+		_smoke_check(gp_bots["pac_count"] == 4, "bot count fills pac slots")
+
+		lobby.room = {
+			"code": "TEST", "hostId": "p_host",
+			"players": [
+				{"id": "p_host", "name": "HOST", "color": "yellow", "role": "ghost", "ghost_name": "clyde"},
+			],
+		}
+		lobby.selected_bots = 0
+		_smoke_check(build_start_payload().is_empty(), "room without pacman is rejected")
+		lobby.selected_bots = 1
+		var gp_one_bot := build_start_payload()
+		_smoke_check(not gp_one_bot.is_empty() and gp_one_bot["pac_count"] == 1, "bot supplies missing pacman")
 
 		online_role = "host"
 		roster = gp["roster"]

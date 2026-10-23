@@ -6,9 +6,10 @@ var font: Font
 var room: Dictionary = {}
 var player_id := ""
 var host_id := ""
-var selected_mode := "team"
-var selected_pac_count := 1
+var selected_role := "pac"
 var selected_color := "yellow"
+var selected_ghost := "blinky"
+var selected_bots := 2
 var connected := false
 
 var join_panel: Panel
@@ -21,13 +22,16 @@ var code_edit: LineEdit
 var room_code_label: Label
 var players_label: Label
 var status_label: Label
-var mode_option: OptionButton
-var mode_label: Label
 var start_button: Button
 var leave_button: Button
 var copy_button: Button
 var touch_check: CheckBox
-var color_buttons: Dictionary = {}
+var role_pac_button: Button
+var role_ghost_button: Button
+var bots_label: Label
+var bot_minus: Button
+var bot_plus: Button
+var color_buttons: Array = []
 var create_button: Button
 var join_button: Button
 var practice_button: Button
@@ -166,50 +170,44 @@ func _build() -> void:
 
 	room_panel = Panel.new()
 	room_panel.position = Vector2(510, 145)
-	room_panel.size = Vector2(425, 390)
+	room_panel.size = Vector2(425, 440)
 	room_panel.add_theme_stylebox_override("panel", _panel_style())
 	room_ui.add_child(room_panel)
 
-	_label("SALA", 8, Config.GREY, Vector2(535, 163))
-	room_code_label = _label("----", 30, Config.YELLOW, Vector2(535, 184))
+	_label("SALA", 8, Config.GREY, Vector2(535, 160))
+	room_code_label = _label("----", 30, Config.YELLOW, Vector2(535, 181))
 	copy_button = _button("COPIAR ENLACE", Vector2(765, 188), Vector2(145, 30), Config.CYAN)
 	copy_button.add_theme_font_size_override("font_size", 6)
 	copy_button.pressed.connect(_on_copy)
 
-	_label("JUGADORES", 8, Config.GREY, Vector2(535, 234))
-	players_label = _label("", 8, Config.WHITE, Vector2(535, 257), 370)
+	_label("JUGADORES", 8, Config.GREY, Vector2(535, 225))
+	players_label = _label("", 8, Config.WHITE, Vector2(535, 247), 370)
 	players_label.size = Vector2(370, 80)
 	players_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	_label("MODO", 8, Config.GREY, Vector2(535, 330))
-	mode_option = OptionButton.new()
-	mode_option.position = Vector2(535, 352)
-	mode_option.size = Vector2(250, 32)
-	mode_option.focus_mode = Control.FOCUS_NONE
-	mode_option.add_theme_font_override("font", font)
-	mode_option.add_theme_font_size_override("font_size", 7)
-	mode_option.add_item("EQUIPO: 4 PAC-MEN")
-	mode_option.add_item("FANTASMA: 1 PAC-MAN")
-	mode_option.add_item("FANTASMA: 2 PAC-MEN")
-	mode_option.item_selected.connect(_on_mode_selected)
-	room_ui.add_child(mode_option)
-	mode_label = _label("", 7, Config.CYAN, Vector2(795, 360))
-	mode_label.visible = false
+	_label("TU ROL", 8, Config.GREY, Vector2(535, 330))
+	role_pac_button = _button("PAC-MAN", Vector2(535, 350), Vector2(125, 30), Config.YELLOW)
+	role_pac_button.pressed.connect(func(): _on_role("pac"))
+	role_ghost_button = _button("FANTASMA", Vector2(670, 350), Vector2(125, 30), Config.CYAN)
+	role_ghost_button.pressed.connect(func(): _on_role("ghost"))
 
-	_label("TU PAC-MAN", 8, Config.GREY, Vector2(535, 396))
-	var names := Config.PAC_COLOR_ORDER
-	for i in range(names.size()):
-		var cid: String = names[i]
-		var b := _button(Config.PAC_COLOR_NAMES[cid], Vector2(535 + i * 88, 418),
-			Vector2(80, 32), Config.PAC_COLORS[cid])
+	_label("TU COLOR", 8, Config.GREY, Vector2(535, 386))
+	for i in range(4):
+		var b := _button("", Vector2(535 + i * 88, 405), Vector2(82, 30), Config.WHITE)
 		b.add_theme_font_size_override("font_size", 5)
-		b.pressed.connect(_on_color.bind(cid))
-		color_buttons[cid] = b
+		b.pressed.connect(_on_color_index.bind(i))
+		color_buttons.append(b)
+
+	bots_label = _label("BOTS: 2", 8, Config.WHITE, Vector2(535, 440))
+	bot_minus = _button("-", Vector2(650, 438), Vector2(28, 28), Config.WHITE)
+	bot_minus.pressed.connect(func(): _on_bots(-1))
+	bot_plus = _button("+", Vector2(690, 438), Vector2(28, 28), Config.WHITE)
+	bot_plus.pressed.connect(func(): _on_bots(1))
 
 	touch_check = CheckBox.new()
 	touch_check.text = "CONTROLES TACTILES"
-	touch_check.position = Vector2(535, 462)
-	touch_check.size = Vector2(320, 30)
+	touch_check.position = Vector2(535, 492)
+	touch_check.size = Vector2(320, 28)
 	touch_check.focus_mode = Control.FOCUS_NONE
 	touch_check.add_theme_font_override("font", font)
 	touch_check.add_theme_font_size_override("font_size", 7)
@@ -217,14 +215,14 @@ func _build() -> void:
 	touch_check.toggled.connect(_on_touch_toggled)
 	room_ui.add_child(touch_check)
 
-	start_button = _button("INICIAR PARTIDA", Vector2(535, 500), Vector2(230, 34), Config.GREEN)
+	start_button = _button("INICIAR PARTIDA", Vector2(535, 530), Vector2(230, 34), Config.GREEN)
 	start_button.pressed.connect(func(): game.start_host_game())
-	leave_button = _button("SALIR", Vector2(780, 500), Vector2(120, 34), Config.SALMON)
+	leave_button = _button("SALIR", Vector2(780, 530), Vector2(120, 34), Config.SALMON)
 	leave_button.pressed.connect(_on_leave)
 
 	ui_parent = null
 	status_label = _label("CONECTANDO AL SERVIDOR...", 7, Config.GREY,
-		Vector2(65, 566), 870)
+		Vector2(65, 592), 870)
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_label("ARROWS/WASD O D-PAD  ·  ELIGE COLOR  ·  EL HOST INICIA", 6, Config.DIM,
@@ -302,12 +300,15 @@ func on_room(r: Dictionary) -> void:
 		room_code_label.text = str(r.get("code", "----"))
 	var settings = r.get("settings", {})
 	if typeof(settings) == TYPE_DICTIONARY:
-		selected_mode = str(settings.get("mode", selected_mode))
-		selected_pac_count = int(settings.get("pac_count", selected_pac_count))
+		selected_bots = clampi(int(settings.get("bots", selected_bots)), 0, 4)
 	var found := false
 	for p in r.get("players", []):
 		if str(p.get("id", "")) == player_id:
+			selected_role = "ghost" if str(p.get("role", "pac")) == "ghost" else "pac"
 			selected_color = str(p.get("color", selected_color))
+			var gn := str(p.get("ghost_name", selected_ghost))
+			if Config.GHOST_ORDER.has(gn):
+				selected_ghost = gn
 			found = true
 			break
 	if not found and player_id != "":
@@ -330,35 +331,80 @@ func _is_host() -> bool:
 func _player_color_name(cid: String) -> String:
 	return Config.PAC_COLOR_NAMES.get(cid, cid.to_upper())
 
+func _human_pac_count() -> int:
+	var count := 0
+	for p in room.get("players", []):
+		if str(p.get("role", "pac")) != "ghost":
+			count += 1
+	return count
+
+func _free_pac_slots() -> int:
+	return maxi(0, 4 - _human_pac_count())
+
+func _has_pac_choice() -> bool:
+	return _human_pac_count() > 0 or selected_bots > 0
+
+func _used_other_palette(role: String) -> Dictionary:
+	var used := {}
+	for p in room.get("players", []):
+		if str(p.get("id", "")) == player_id:
+			continue
+		if role == "pac" and str(p.get("role", "pac")) != "ghost":
+			used[str(p.get("color", "yellow"))] = true
+		elif role == "ghost" and str(p.get("role", "pac")) == "ghost":
+			used[str(p.get("ghost_name", "blinky"))] = true
+	return used
+
+func _first_free_palette(role: String) -> String:
+	var palette: Array = Config.PAC_COLOR_ORDER if role == "pac" else Config.GHOST_ORDER
+	var used := _used_other_palette(role)
+	for cid in palette:
+		if not used.has(cid):
+			return str(cid)
+	return ""
+
+func _send_profile() -> void:
+	if game and game.net:
+		game.net.send_dict({
+			"type": "profile",
+			"role": selected_role,
+			"color": selected_color,
+			"ghost_name": selected_ghost,
+		})
+
 func refresh_ui() -> void:
 	if not is_inside_tree():
 		return
 	var host := _is_host()
-	mode_option.visible = host
-	mode_option.disabled = not host
+	role_pac_button.visible = room_ui.visible
+	role_ghost_button.visible = room_ui.visible
 	start_button.visible = host
-	start_button.disabled = not host or not connected
+	start_button.disabled = not host or not connected or not _has_pac_choice()
 	leave_button.visible = room_ui.visible
 	copy_button.visible = room_ui.visible
-	if host:
-		var idx := 0
-		if selected_mode == "ghost":
-			idx = 0 if selected_pac_count == 1 else 1
-			idx += 1
-		mode_option.select(idx)
-	else:
-		mode_label.visible = true
-		if selected_mode == "team":
-			mode_label.text = "EQUIPO"
-		else:
-			mode_label.text = "FANTASMA %d" % selected_pac_count
-	mode_label.visible = not host
+	bot_minus.visible = host and room_ui.visible
+	bot_plus.visible = host and room_ui.visible
+	bots_label.visible = room_ui.visible
+	bots_label.text = "BOTS: %d" % selected_bots
+	if host and selected_bots > _free_pac_slots():
+		bots_label.text = "BOTS: %d (MAX %d)" % [selected_bots, _free_pac_slots()]
+	role_pac_button.text = ("> " if selected_role == "pac" else "") + "PAC-MAN"
+	role_ghost_button.text = ("> " if selected_role == "ghost" else "") + "FANTASMA"
 
-	for cid in color_buttons.keys():
-		var b: Button = color_buttons[cid]
-		var mark := "> " if cid == selected_color else ""
-		b.text = mark + Config.PAC_COLOR_NAMES[cid]
-		b.disabled = not room_ui.visible
+	var palette: Array = Config.PAC_COLOR_ORDER if selected_role == "pac" else Config.GHOST_ORDER
+	var selected_key := selected_color if selected_role == "pac" else selected_ghost
+	var used := _used_other_palette(selected_role)
+	for i in range(color_buttons.size()):
+		var b: Button = color_buttons[i]
+		var cid := str(palette[i])
+		var label := str(Config.PAC_COLOR_NAMES.get(cid, cid.to_upper()))
+		var col: Color = Config.PAC_COLORS.get(cid, Config.WHITE)
+		if selected_role == "ghost":
+			label = str(Config.GHOST_NAME_LABELS.get(cid, cid.to_upper()))
+			col = Config.GHOST_COLORS.get(cid, Config.WHITE)
+		b.text = ("> " if cid == selected_key else "") + label
+		b.disabled = not room_ui.visible or (used.has(cid) and cid != selected_key)
+		b.add_theme_color_override("font_color", col)
 
 	if room.is_empty():
 		players_label.text = ""
@@ -367,15 +413,23 @@ func refresh_ui() -> void:
 	var players: Array = room.get("players", [])
 	for p in players:
 		var pid := str(p.get("id", ""))
-		var cid := str(p.get("color", "yellow"))
 		var tag := ">" if pid == player_id else " "
 		var host_tag := " *" if pid == host_id else ""
-		lines += "%s %s%s  %s\n" % [tag, str(p.get("name", "JUGADOR")), host_tag, _player_color_name(cid)]
+		var role := str(p.get("role", "pac"))
+		var detail := ""
+		if role == "ghost":
+			detail = "GHOST " + str(Config.GHOST_NAME_LABELS.get(str(p.get("ghost_name", "blinky")), "BLINKY"))
+		else:
+			detail = "PAC " + _player_color_name(str(p.get("color", "yellow")))
+		lines += "%s %s%s  %s\n" % [tag, str(p.get("name", "JUGADOR")), host_tag, detail]
 	players_label.text = lines
 	if host:
-		set_status("ERES EL HOST. ELIGE MODO Y PULSA INICIAR.", Config.YELLOW)
+		if not _has_pac_choice():
+			set_status("FALTA UN PAC-MAN. AGREGA UN BOT O CAMBIA DE ROL.", Config.RED)
+		else:
+			set_status("ELIGE ROL, COLOR Y BOTS. PULSA INICIAR.", Config.YELLOW)
 	else:
-		set_status("ESPERANDO A QUE EL HOST INICIE...", Config.CYAN)
+		set_status("ELIGE ROL Y COLOR. ESPERANDO AL HOST...", Config.CYAN)
 
 func _on_code_changed(new_text: String) -> void:
 	var up := new_text.to_upper()
@@ -390,7 +444,10 @@ func _on_create() -> void:
 	var n := name_edit.text.strip_edges()
 	if n == "":
 		n = "JUGADOR"
-	game.net.send_dict({"type": "create", "name": n, "color": selected_color})
+	game.net.send_dict({
+		"type": "create", "name": n, "color": selected_color,
+		"role": selected_role, "ghost_name": selected_ghost,
+	})
 	set_status("CREANDO SALA...", Config.YELLOW)
 
 func _on_join() -> void:
@@ -404,31 +461,46 @@ func _on_join() -> void:
 	var n := name_edit.text.strip_edges()
 	if n == "":
 		n = "JUGADOR"
-	game.net.send_dict({"type": "join", "room": code, "name": n, "color": selected_color})
+	game.net.send_dict({
+		"type": "join", "room": code, "name": n, "color": selected_color,
+		"role": selected_role, "ghost_name": selected_ghost,
+	})
 	set_status("UNIENDOSE A %s..." % code, Config.YELLOW)
 
-func _on_mode_selected(index: int) -> void:
-	match index:
-		0:
-			selected_mode = "team"
-			selected_pac_count = 4
-		1:
-			selected_mode = "ghost"
-			selected_pac_count = 1
-		2:
-			selected_mode = "ghost"
-			selected_pac_count = 2
-	if game and game.net and _is_host():
-		game.net.send_dict({"type": "lobby", "data": {
-			"mode": selected_mode,
-			"pac_count": selected_pac_count,
-		}})
+func _on_role(role: String) -> void:
+	if role == selected_role:
+		return
+	var cid := _first_free_palette(role)
+	if cid == "":
+		set_status("NO HAY HUECO PARA ESE ROL.", Config.RED)
+		return
+	selected_role = role
+	if role == "pac":
+		selected_color = cid
+	else:
+		selected_ghost = cid
+	_send_profile()
 	refresh_ui()
 
-func _on_color(cid: String) -> void:
-	selected_color = cid
+func _on_color_index(index: int) -> void:
+	var palette: Array = Config.PAC_COLOR_ORDER if selected_role == "pac" else Config.GHOST_ORDER
+	var cid := str(palette[index])
+	if _used_other_palette(selected_role).has(cid):
+		set_status("ESE COLOR YA ESTA OCUPADO.", Config.RED)
+		return
+	if selected_role == "pac":
+		selected_color = cid
+	else:
+		selected_ghost = cid
+	_send_profile()
+	refresh_ui()
+
+func _on_bots(delta: int) -> void:
+	if not _is_host():
+		return
+	selected_bots = clampi(selected_bots + delta, 0, 4)
 	if game and game.net:
-		game.net.send_dict({"type": "color", "color": cid})
+		game.net.send_dict({"type": "lobby", "data": {"bots": selected_bots}})
 	refresh_ui()
 
 func _on_touch_toggled(pressed: bool) -> void:

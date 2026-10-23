@@ -10,7 +10,9 @@ const PORT = Number(process.env.PORT || 3000);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_PLAYERS = 4;
 const COLORS = new Set(['yellow', 'blue', 'green', 'pink']);
-const MODES = new Set(['team', 'ghost']);
+const COLOR_ORDER = ['yellow', 'blue', 'green', 'pink'];
+const GHOSTS = new Set(['blinky', 'pinky', 'inky', 'clyde']);
+const GHOST_ORDER = ['blinky', 'pinky', 'inky', 'clyde'];
 
 const rooms = new Map();
 
@@ -62,6 +64,46 @@ function cleanColor(value) {
   return COLORS.has(value) ? value : 'yellow';
 }
 
+function cleanRole(value) {
+  return value === 'ghost' ? 'ghost' : 'pac';
+}
+
+function cleanGhostName(value) {
+  return GHOSTS.has(value) ? value : 'blinky';
+}
+
+function pacColorTaken(room, color, exceptId = null) {
+  for (const p of room.players.values()) {
+    if (p.id !== exceptId && p.role === 'pac' && p.color === color) return true;
+  }
+  return false;
+}
+
+function ghostNameTaken(room, ghostName, exceptId = null) {
+  for (const p of room.players.values()) {
+    if (p.id !== exceptId && p.role === 'ghost' && p.ghost_name === ghostName) return true;
+  }
+  return false;
+}
+
+function firstFreePacColor(room, requested, exceptId = null) {
+  const wanted = cleanColor(requested);
+  if (!pacColorTaken(room, wanted, exceptId)) return wanted;
+  for (const color of COLOR_ORDER) {
+    if (!pacColorTaken(room, color, exceptId)) return color;
+  }
+  return wanted;
+}
+
+function firstFreeGhostName(room, requested, exceptId = null) {
+  const wanted = cleanGhostName(requested);
+  if (!ghostNameTaken(room, wanted, exceptId)) return wanted;
+  for (const ghost of GHOST_ORDER) {
+    if (!ghostNameTaken(room, ghost, exceptId)) return ghost;
+  }
+  return wanted;
+}
+
 function send(ws, payload) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(payload));
@@ -73,6 +115,8 @@ function publicPlayer(player) {
     id: player.id,
     name: player.name,
     color: player.color,
+    role: player.role,
+    ghost_name: player.ghost_name || '',
     joinedAt: player.joinedAt,
   };
 }
@@ -138,10 +182,13 @@ function leaveRoom(ws, reason = 'left') {
 function createRoom(ws, msg) {
   leaveRoom(ws, 'switch');
   const code = makeCode();
+  const role = cleanRole(msg.role);
   const player = {
     id: makeId('p_'),
     name: cleanName(msg.name),
     color: cleanColor(msg.color),
+    role,
+    ghost_name: role === 'ghost' ? cleanGhostName(msg.ghost_name) : '',
     ws,
     joinedAt: now(),
   };
@@ -149,7 +196,7 @@ function createRoom(ws, msg) {
     code,
     hostId: player.id,
     players: new Map([[player.id, player]]),
-    settings: { mode: 'team', pac_count: 4 },
+    settings: { bots: 2 },
     started: false,
     createdAt: now(),
   };
@@ -183,13 +230,21 @@ function joinRoom(ws, msg) {
     return;
   }
   leaveRoom(ws, 'switch');
+  const role = cleanRole(msg.role);
   const player = {
     id: makeId('p_'),
     name: cleanName(msg.name),
     color: cleanColor(msg.color),
+    role,
+    ghost_name: '',
     ws,
     joinedAt: now(),
   };
+  if (role === 'ghost') {
+    player.ghost_name = firstFreeGhostName(room, msg.ghost_name);
+  } else {
+    player.color = firstFreePacColor(room, msg.color);
+  }
   room.players.set(player.id, player);
   ws.meta.room = code;
   ws.meta.id = player.id;
@@ -233,8 +288,38 @@ function handleMessage(ws, raw) {
   const player = room.players.get(meta.id);
   if (!player) return;
 
+  if (type === 'profile') {
+    const role = cleanRole(msg.role);
+    if (role === 'ghost') {
+      const ghostName = cleanGhostName(msg.ghost_name || player.ghost_name);
+      if (ghostNameTaken(room, ghostName, player.id)) {
+        send(ws, { type: 'error', message: 'Ese fantasma ya esta ocupado.' });
+        return;
+      }
+      player.role = 'ghost';
+      player.ghost_name = ghostName;
+    } else {
+      const color = cleanColor(msg.color || player.color);
+      if (pacColorTaken(room, color, player.id)) {
+        send(ws, { type: 'error', message: 'Ese color de Pac-Man ya esta ocupado.' });
+        return;
+      }
+      player.role = 'pac';
+      player.color = color;
+    }
+    broadcastRoom(room);
+    return;
+  }
+
+  // Compatibilidad con clientes antiguos.
   if (type === 'color') {
-    player.color = cleanColor(msg.color);
+    const color = cleanColor(msg.color);
+    if (pacColorTaken(room, color, player.id)) {
+      send(ws, { type: 'error', message: 'Ese color de Pac-Man ya esta ocupado.' });
+      return;
+    }
+    player.role = 'pac';
+    player.color = color;
     broadcastRoom(room);
     return;
   }
@@ -242,9 +327,9 @@ function handleMessage(ws, raw) {
   if (type === 'lobby') {
     if (meta.id !== room.hostId || room.started) return;
     const data = msg.data || {};
-    const mode = MODES.has(data.mode) ? data.mode : 'team';
-    const pacCount = mode === 'team' ? 4 : (Number(data.pac_count) === 1 ? 1 : 2);
-    room.settings = { mode, pac_count: pacCount };
+    const rawBots = Number(data.bots);
+    const bots = Number.isFinite(rawBots) ? Math.max(0, Math.min(4, Math.trunc(rawBots))) : 2;
+    room.settings = { bots };
     broadcastRoom(room);
     return;
   }

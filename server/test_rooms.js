@@ -49,28 +49,44 @@ async function main() {
   await Promise.all([host.opened, guest.opened]);
   await host.wait((m) => m.type === 'hello');
 
-  host.send({ type: 'create', name: 'HOST', color: 'yellow' });
+  host.send({ type: 'create', name: 'HOST', color: 'yellow', role: 'pac' });
   const welcome = await host.wait((m) => m.type === 'welcome');
   assert.match(welcome.room, /^[A-Z0-9]{4}$/);
 
-  guest.send({ type: 'join', room: welcome.room, name: 'GUEST', color: 'blue' });
+  guest.send({
+    type: 'join', room: welcome.room, name: 'GUEST',
+    color: 'blue', role: 'ghost', ghost_name: 'blinky',
+  });
   const joined = await guest.wait((m) => m.type === 'welcome');
   assert.strictEqual(joined.hostId, welcome.playerId);
 
   const room = await host.wait((m) => m.type === 'room' && m.room.players.length === 2);
   assert.strictEqual(room.room.hostId, welcome.playerId);
+  const guestPlayer = room.room.players.find((p) => p.id === joined.playerId);
+  assert.strictEqual(guestPlayer.role, 'ghost');
+  assert.strictEqual(guestPlayer.ghost_name, 'blinky');
+  assert.strictEqual(room.room.settings.bots, 2);
 
-  host.send({ type: 'lobby', data: { mode: 'ghost', pac_count: 1 } });
-  const settings = await guest.wait((m) => m.type === 'room' && m.room.settings.mode === 'ghost');
-  assert.strictEqual(settings.room.settings.pac_count, 1);
+  host.send({ type: 'lobby', data: { bots: 0 } });
+  const settings = await guest.wait((m) => m.type === 'room' && m.room.settings.bots === 0);
+  assert.strictEqual(settings.room.settings.bots, 0);
 
-  host.send({ type: 'color', color: 'green' });
-  const colorRoom = await guest.wait((m) => m.type === 'room' && m.room.players.some((p) => p.color === 'green'));
-  assert.ok(colorRoom);
+  guest.send({ type: 'profile', role: 'pac', color: 'green', ghost_name: 'blinky' });
+  const profile = await host.wait((m) => m.type === 'room' && m.room.players.some((p) => p.id === joined.playerId && p.role === 'pac' && p.color === 'green'));
+  assert.ok(profile);
+
+  // El host no puede usar un color ya ocupado.
+  host.send({ type: 'profile', role: 'pac', color: 'green', ghost_name: 'blinky' });
+  const conflict = await host.wait((m) => m.type === 'error');
+  assert.match(conflict.message, /ocupado/);
+
+  host.send({ type: 'profile', role: 'ghost', ghost_name: 'pinky', color: 'yellow' });
+  const ghostHost = await guest.wait((m) => m.type === 'room' && m.room.players.some((p) => p.id === welcome.playerId && p.role === 'ghost' && p.ghost_name === 'pinky'));
+  assert.ok(ghostHost);
 
   const roster = [
-    { id: welcome.playerId, name: 'HOST', color: 'yellow', role: 'pac', pac_index: 0, ai: false, connected: true },
-    { id: joined.playerId, name: 'GUEST', role: 'ghost', ghost_name: 'blinky', ai: false, connected: true },
+    { id: welcome.playerId, name: 'HOST', role: 'ghost', ghost_name: 'pinky', ai: false, connected: true },
+    { id: joined.playerId, name: 'GUEST', color: 'green', role: 'pac', pac_index: 0, ai: false, connected: true },
   ];
   host.send({ type: 'start', data: { mode: 'ghost', pac_count: 1, roster, seed: 1 } });
   const start = await guest.wait((m) => m.type === 'start');

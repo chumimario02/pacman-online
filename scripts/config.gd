@@ -38,6 +38,13 @@ const PAC_COLOR_NAMES := {
 	"pink": "ROSA",
 }
 const PAC_COLOR_ORDER := ["yellow", "blue", "green", "pink"]
+const GHOST_ORDER := ["blinky", "pinky", "inky", "clyde"]
+const GHOST_NAME_LABELS := {
+	"blinky": "BLINKY",
+	"pinky": "PINKY",
+	"inky": "INKY",
+	"clyde": "CLYDE",
+}
 const PAC_STARTS := [
 	Vector2i(13, 23), Vector2i(12, 23), Vector2i(14, 23), Vector2i(15, 23),
 ]

@@ -5,18 +5,19 @@ Pac-Men de colores, controles táctiles y partidas de Pac-Man contra fantasmas.
 
 El puerto de un solo jugador sigue intacto en `../pacman_godot`.
 
-## Modos
+## Sala personalizada
 
-- **Equipo — 4 Pac-Men:** todos los jugadores controlan un Pac-Man. Los espacios
-  libres los ocupan CPUs.
-- **Fantasma — 1 Pac-Man vs 3 fantasmas:** el primer jugador es Pac-Man y los
-  demás controlan a Blinky, Pinky, Inky y Clyde. La CPU completa los huecos.
-- **Fantasma — 2 Pac-Men vs 2 fantasmas:** dos jugadores son Pac-Men y dos son
-  fantasmas; la CPU completa los huecos.
+Cada jugador elige libremente:
 
-El anfitrión elige el modo, el color de su Pac-Man e inicia la partida. Los
-Pac-Men pueden ser amarillo, azul, verde o rosa. Los fantasmas conservan sus
-colores clásicos.
+- **Rol:** Pac-Man o fantasma.
+- **Color:** amarillo, azul, verde o rosa para Pac-Man; Blinky, Pinky, Inky o
+  Clyde para fantasma.
+- **Bots:** el anfitrión decide cuántos Pac-Men controlados por la CPU completan
+  la partida (0 a 4). Los fantasmas que no elija un jugador siguen siendo CPU.
+
+La partida puede ser de 1 a 4 Pac-Men contra los cuatro fantasmas. Si no queda
+ningún Pac-Man humano, el anfitrión debe añadir al menos un bot para poder
+iniciar. El color y el fantasma elegidos no se pueden repetir.
 
 ## Jugar en local
 
@@ -67,7 +68,7 @@ pantalla táctil se activan automáticamente.
   mensajes por `/ws`.
 - **Autoridad:** el anfitrión simula la partida y envía snapshots a 20 Hz. Los
   clientes interpolan posiciones y aplican eventos.
-- **Salas:** código de 4 letras, máximo 4 jugadores, relleno automático con IA.
+- **Salas:** código de 4 letras, máximo 4 jugadores humanos. Cada uno elige rol y color; el host elige cuántos bots Pac-Man completan la partida y la CPU cubre los fantasmas que no elija nadie.
 - Si un jugador se desconecta, su personaje pasa a ser controlado por la CPU.
 - Si el anfitrión sale, la sala se cierra.
 
