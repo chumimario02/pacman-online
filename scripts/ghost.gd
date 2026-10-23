@@ -148,9 +148,19 @@ func _choose() -> void:
 		dir = null
 		return
 
-	var player_pick = _player_choice()
-	if player_pick != null:
-		dir = player_pick
+	# Un fantasma controlado por un jugador solo se mueve con su entrada.
+	# Si no hay dirección válida, se queda quieto en vez de usar la IA.
+	if is_player and state == "normal":
+		var player_pick = _player_choice()
+		if player_pick != null:
+			dir = player_pick
+			return
+		dir = null
+		return
+
+	var manual_pick = _player_choice()
+	if manual_pick != null:
+		dir = manual_pick
 		return
 
 	if state == "leaving":

@@ -1877,6 +1877,16 @@ func _run_online_smoke() -> void:
 			_smoke_check(pinky_ghost.tile.x > 1, "human ghost moves with player input")
 
 			pinky_ghost.state = "normal"
+			pinky_ghost.tile = Vector2i(1, 1)
+			pinky_ghost.progress = 0.0
+			pinky_ghost.dir = Config.DIRS["right"]
+			pinky_ghost.desired_dir = null
+			for i in range(30):
+				time += 1.0 / 60.0
+				pinky_ghost.update_ghost(1.0 / 60.0)
+			_smoke_check(pinky_ghost.tile == Vector2i(1, 1), "human ghost stops without player input")
+
+			pinky_ghost.state = "normal"
 			pinky_ghost.frightened = true
 			pinky_ghost.tile = Vector2i(5, 5)
 			pinky_ghost.progress = 0.0
