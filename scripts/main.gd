@@ -739,17 +739,43 @@ func _update_mode(dt: float) -> void:
 func _ai_pac_update(p, dt: float) -> void:
 	if p.progress <= 1e-9 or p.desired == null:
 		var best = null
-		var best_d := 99999
+		var best_score := 1e9
 		for d in Config.DIR_ORDER:
 			var nt = maze.neighbor(p.tile, d)
 			if not maze.is_walkable(nt, true):
 				continue
 			if p.dir != null and d == Vector2i(-p.dir.x, -p.dir.y):
 				continue
-			var dd: int = maze.distance_to_nearest_pellet(nt)
-			if dd < best_d:
-				best_d = dd
+			var pellet_dist: int = maze.distance_to_nearest_pellet(nt)
+			var ghost_dist := 999.0
+			for g in ghosts:
+				if g == null or not is_instance_valid(g):
+					continue
+				if g.state in ["eaten", "dead", "house"]:
+					continue
+				var gd := float(abs(nt.x - g.tile.x) + abs(nt.y - g.tile.y))
+				if gd < ghost_dist:
+					ghost_dist = gd
+			var score := float(pellet_dist)
+			if frightened and ghost_dist < 12.0:
+				# En modo poder, perseguir al fantasma mas cercano.
+				score = ghost_dist * 0.8
+			elif frightened:
+				score = float(pellet_dist)
+			elif ghost_dist <= 5.0:
+				# Evitar fantasmas peligrosos, con mas fuerza cuanto mas cerca.
+				score += (6.0 - ghost_dist) * 12.0
+			if p.dir == d:
+				score -= 0.35
+			if score < best_score:
+				best_score = score
 				best = d
+		if best == null:
+			for d in Config.DIR_ORDER:
+				var nt = maze.neighbor(p.tile, d)
+				if maze.is_walkable(nt, true):
+					best = d
+					break
 		if best != null:
 			p.desired = best
 	p.update_pac(dt)
