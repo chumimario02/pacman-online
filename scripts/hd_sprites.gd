@@ -28,29 +28,33 @@ static func _pac_dir_angle(dir_name: String) -> float:
 		"down": return PI * 0.5
 	return 0.0
 
+static func _tex(img: Image) -> ImageTexture:
+	var out := img.duplicate()
+	out.resize(32, 32, Image.INTERPOLATE_BILINEAR)
+	return ImageTexture.create_from_image(out)
+
 static func build_pac_frames() -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	sf.add_animation("chomp")
 	for frame in range(2):
-		for dir_name in ["right", "left", "up", "down"]:
-			var img := _img()
-			var mouth := 0.45 if frame == 0 else 0.08
-			var da := _pac_dir_angle(dir_name)
-			for y in range(64):
-				for x in range(64):
-					var dx := float(x) - 32.0
-					var dy := float(y) - 32.0
-					var rr := dx * dx + dy * dy
-					if rr > 28.0 * 28.0:
-						continue
-					var ang := atan2(dy, dx) - da
-					while ang > PI:
-						ang -= TAU
-					while ang < -PI:
-						ang += TAU
-					if abs(ang) > mouth:
-						img.set_pixel(x, y, Color(1.0, 0.9, 0.0, 1.0))
-			sf.add_frame("chomp", ImageTexture.create_from_image(img))
+		var img := _img()
+		var mouth := 0.45 if frame == 0 else 0.08
+		var da := 0.0  # right-facing; sprite rotates via game code
+		for y in range(64):
+			for x in range(64):
+				var dx := float(x) - 32.0
+				var dy := float(y) - 32.0
+				var rr := dx * dx + dy * dy
+				if rr > 28.0 * 28.0:
+					continue
+				var ang := atan2(dy, dx) - da
+				while ang > PI:
+					ang -= TAU
+				while ang < -PI:
+					ang += TAU
+				if abs(ang) > mouth:
+					img.set_pixel(x, y, Color(1.0, 0.9, 0.0, 1.0))
+		sf.add_frame("chomp", _tex(img))
 	sf.set_animation_loop("chomp", true)
 	sf.set_animation_speed("chomp", 12.0)
 	return sf
@@ -107,7 +111,7 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 			var img := _img()
 			_ghost_body(img, base_color, frame)
 			_ghost_eyes(img, anim, false, false)
-			sf.add_frame(anim, ImageTexture.create_from_image(img))
+			sf.add_frame(anim, _tex(img))
 		sf.set_animation_loop(anim, true)
 		sf.set_animation_speed(anim, 8.0)
 	# frightened
@@ -116,7 +120,7 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		var img := _img()
 		_ghost_body(img, Color(0.1, 0.2, 0.9, 1), frame)
 		_ghost_eyes(img, "down", true, false)
-		sf.add_frame("fright", ImageTexture.create_from_image(img))
+		sf.add_frame("fright", _tex(img))
 	sf.set_animation_loop("fright", true)
 	sf.set_animation_speed("fright", 8.0)
 	# flash
@@ -126,7 +130,7 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		var col := Color(1, 1, 1, 1) if frame == 0 else Color(0.1, 0.2, 0.9, 1)
 		_ghost_body(img, col, frame)
 		_ghost_eyes(img, "down", true, true)
-		sf.add_frame("flash", ImageTexture.create_from_image(img))
+		sf.add_frame("flash", _tex(img))
 	sf.set_animation_loop("flash", true)
 	sf.set_animation_speed("flash", 8.0)
 	# eyes
@@ -146,7 +150,7 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		_circle(img, 22.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
 		_circle(img, 42.0, 24.0, 4.0, Color(1, 1, 1, 1))
 		_circle(img, 42.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
-		sf.add_frame(anim_name, ImageTexture.create_from_image(img))
+		sf.add_frame(anim_name, _tex(img))
 		sf.set_animation_loop(anim_name, false)
 		sf.set_animation_speed(anim_name, 1.0)
 	return sf

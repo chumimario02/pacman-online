@@ -122,7 +122,7 @@ static var MODE_SCHEDULE := [
 	[5.0, "scatter"],
 ]
 const CHASE_FOREVER := 999999.0
-const USE_HD_SPRITES := false
+const USE_HD_SPRITES := true
 
 static var MAZE_LAYOUT := [
 	"############################",
