@@ -1358,9 +1358,12 @@ func _on_net_input(msg: Dictionary) -> void:
 	var p = _find_pac_by_id(pid)
 	if p != null and p.active:
 		p.desired = Config.DIRS[dname]
+		p.update_pac(0.0)
 	var g = _find_ghost_by_id(pid)
 	if g != null:
 		g.desired_dir = Config.DIRS[dname]
+		g.update_ghost(0.0)
+	_host_send_snapshot()
 
 func _on_room_closed(reason: String) -> void:
 	if lobby:
