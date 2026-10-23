@@ -210,9 +210,9 @@ func _build() -> void:
 	bot_plus.pressed.connect(func(): _on_bots(1))
 
 	bots_ghost_label = _label("BOTS FANTASMAS: 2", 8, Config.WHITE, Vector2(535, 472))
-	bot_ghost_minus = _button("-", Vector2(650, 470), Vector2(28, 28), Config.WHITE)
+	bot_ghost_minus = _button("-", Vector2(760, 470), Vector2(28, 28), Config.WHITE)
 	bot_ghost_minus.pressed.connect(func(): _on_ghost_bots(-1))
-	bot_ghost_plus = _button("+", Vector2(690, 470), Vector2(28, 28), Config.WHITE)
+	bot_ghost_plus = _button("+", Vector2(800, 470), Vector2(28, 28), Config.WHITE)
 	bot_ghost_plus.pressed.connect(func(): _on_ghost_bots(1))
 
 	touch_check = CheckBox.new()

@@ -149,12 +149,17 @@ func _choose() -> void:
 		return
 
 	# Un fantasma controlado por un jugador solo se mueve con su entrada.
-	# Si no hay dirección válida, se queda quieto en vez de usar la IA.
+	# Si la dirección elegida no es válida, sigue con la actual si puede;
+	# solo se detiene si no hay salida, como Pac-Man.
 	if is_player and state == "normal":
 		var player_pick = _player_choice()
 		if player_pick != null:
 			dir = player_pick
 			return
+		if dir != null:
+			var nt = maze.neighbor(tile, dir)
+			if maze.is_walkable(nt, false, _allow_house()):
+				return
 		dir = null
 		return
 

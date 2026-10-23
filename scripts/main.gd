@@ -627,40 +627,6 @@ func _begin_local(data: Dictionary) -> void:
 	audio.stop_all()
 	audio.play("intro")
 	_update_touch_visibility()
-	online_mode = MODE_TEAM
-	roster = []
-	online_ghost_names = []
-	local_player_id = "local"
-	local_custom_mode = false
-	dying_player = ""
-	winner = ""
-	lobby.hide_lobby()
-	hud.visible = true
-	if intro:
-		intro.hide_intro()
-	if backdrop:
-		backdrop.visible = false
-	if fullscreen_button:
-		fullscreen_button.visible = false
-	start_new_game()
-	_update_touch_visibility()
-
-func go_menu() -> void:
-	high_score = maxi(high_score, score)
-	save_high()
-	state = Config.LOBBY
-	paused = false
-	menu_time = 0.0
-	world.visible = false
-	hud.visible = false
-	if intro:
-		intro.hide_intro()
-	if backdrop:
-		backdrop.visible = true
-	if fullscreen_button:
-		fullscreen_button.visible = true
-	if lobby:
-		lobby.show_lobby()
 	audio.stop_all()
 
 # ------------------------------------------------------------------- update
@@ -2003,7 +1969,7 @@ func _run_online_smoke() -> void:
 			pinky_ghost.state = "normal"
 			pinky_ghost.tile = Vector2i(1, 1)
 			pinky_ghost.progress = 0.0
-			pinky_ghost.dir = Config.DIRS["right"]
+			pinky_ghost.dir = Config.DIRS["left"]
 			pinky_ghost.desired_dir = null
 			for i in range(30):
 				time += 1.0 / 60.0
