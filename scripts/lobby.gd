@@ -10,6 +10,7 @@ var selected_role := "pac"
 var selected_color := "yellow"
 var selected_ghost := "blinky"
 var selected_bots := 2
+var selected_ghost_bots := 2
 var connected := false
 var local_practice := false
 
@@ -32,6 +33,9 @@ var role_ghost_button: Button
 var bots_label: Label
 var bot_minus: Button
 var bot_plus: Button
+var bots_ghost_label: Label
+var bot_ghost_minus: Button
+var bot_ghost_plus: Button
 var color_buttons: Array = []
 var create_button: Button
 var join_button: Button
@@ -199,15 +203,21 @@ func _build() -> void:
 		b.pressed.connect(_on_color_index.bind(i))
 		color_buttons.append(b)
 
-	bots_label = _label("BOTS: 2", 8, Config.WHITE, Vector2(535, 440))
+	bots_label = _label("BOTS PAC: 2", 8, Config.WHITE, Vector2(535, 440))
 	bot_minus = _button("-", Vector2(650, 438), Vector2(28, 28), Config.WHITE)
 	bot_minus.pressed.connect(func(): _on_bots(-1))
 	bot_plus = _button("+", Vector2(690, 438), Vector2(28, 28), Config.WHITE)
 	bot_plus.pressed.connect(func(): _on_bots(1))
 
+	bots_ghost_label = _label("BOTS FANTASMAS: 2", 8, Config.WHITE, Vector2(535, 472))
+	bot_ghost_minus = _button("-", Vector2(650, 470), Vector2(28, 28), Config.WHITE)
+	bot_ghost_minus.pressed.connect(func(): _on_ghost_bots(-1))
+	bot_ghost_plus = _button("+", Vector2(690, 470), Vector2(28, 28), Config.WHITE)
+	bot_ghost_plus.pressed.connect(func(): _on_ghost_bots(1))
+
 	touch_check = CheckBox.new()
 	touch_check.text = "CONTROLES TACTILES"
-	touch_check.position = Vector2(535, 492)
+	touch_check.position = Vector2(535, 505)
 	touch_check.size = Vector2(320, 28)
 	touch_check.focus_mode = Control.FOCUS_NONE
 	touch_check.add_theme_font_override("font", font)
@@ -216,9 +226,9 @@ func _build() -> void:
 	touch_check.toggled.connect(_on_touch_toggled)
 	room_ui.add_child(touch_check)
 
-	start_button = _button("INICIAR PARTIDA", Vector2(535, 530), Vector2(230, 34), Config.GREEN)
+	start_button = _button("INICIAR PARTIDA", Vector2(535, 545), Vector2(230, 34), Config.GREEN)
 	start_button.pressed.connect(_on_start_pressed)
-	leave_button = _button("SALIR", Vector2(780, 530), Vector2(120, 34), Config.SALMON)
+	leave_button = _button("SALIR", Vector2(780, 545), Vector2(120, 34), Config.SALMON)
 	leave_button.pressed.connect(_on_leave)
 
 	ui_parent = null
@@ -373,7 +383,7 @@ func _send_profile() -> void:
 				p["role"] = selected_role
 				p["color"] = selected_color
 				p["ghost_name"] = selected_ghost
-		room["settings"] = {"bots": selected_bots}
+		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots}
 		refresh_ui()
 		return
 	if game and game.net:
@@ -421,9 +431,14 @@ func refresh_ui() -> void:
 	bot_minus.visible = host and room_ui.visible
 	bot_plus.visible = host and room_ui.visible
 	bots_label.visible = room_ui.visible
-	bots_label.text = "BOTS: %d" % selected_bots
+	bots_label.text = "BOTS PAC: %d" % selected_bots
 	if host and selected_bots > _free_pac_slots():
-		bots_label.text = "BOTS: %d (MAX %d)" % [selected_bots, _free_pac_slots()]
+		bots_label.text = "BOTS PAC: %d (MAX %d)" % [selected_bots, _free_pac_slots()]
+
+	bots_ghost_label.visible = local_practice and room_ui.visible
+	bots_ghost_label.text = "BOTS FANTASMAS: %d" % selected_ghost_bots
+	bot_ghost_minus.visible = local_practice and host and room_ui.visible
+	bot_ghost_plus.visible = local_practice and host and room_ui.visible
 	role_pac_button.text = ("> " if selected_role == "pac" else "") + "PAC-MAN"
 	role_ghost_button.text = ("> " if selected_role == "ghost" else "") + "FANTASMA"
 
@@ -536,12 +551,21 @@ func _on_bots(delta: int) -> void:
 		return
 	selected_bots = clampi(selected_bots + delta, 0, 4)
 	if local_practice:
-		room["settings"] = {"bots": selected_bots}
+		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots}
 		refresh_ui()
 		return
 	if game and game.net:
 		game.net.send_dict({"type": "lobby", "data": {"bots": selected_bots}})
 	refresh_ui()
+
+func _on_ghost_bots(delta: int) -> void:
+	if not _is_host():
+		return
+	selected_ghost_bots = clampi(selected_ghost_bots + delta, 0, 4)
+	if local_practice:
+		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots}
+		refresh_ui()
+		return
 
 func _on_touch_toggled(pressed: bool) -> void:
 	if game:

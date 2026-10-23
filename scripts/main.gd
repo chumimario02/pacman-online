@@ -1413,6 +1413,17 @@ func build_start_payload() -> Dictionary:
 	if human_pacs.size() + bot_count < 1:
 		return {}
 
+	# Fantasmas IA:
+	# - online: se completa la banda si no hay humanos o hay bots Pac-Man.
+	# - practica local: cantidad elegida por separado.
+	var ghost_bot_count := 0
+	var available_ghost_slots := maxi(0, 4 - human_ghosts.size())
+	if lobby != null and lobby.local_practice:
+		ghost_bot_count = clampi(int(lobby.selected_ghost_bots), 0, available_ghost_slots)
+	else:
+		if human_ghosts.is_empty() or bot_count > 0:
+			ghost_bot_count = available_ghost_slots
+
 	var used_colors: Dictionary = {}
 	var roster_out: Array = []
 	for i in range(human_pacs.size()):
@@ -1445,12 +1456,16 @@ func build_start_payload() -> Dictionary:
 			"connected": true,
 		})
 
+	# Fantasmas activos: humanos + la cantidad de fantasmas IA elegida.
 	var used_ghosts: Dictionary = {}
+	var active_ghosts: Array = []
+	var human_ghost_names: Array = []
 	for pl in human_ghosts:
 		var gn := str(pl.get("ghost_name", "blinky"))
 		if not Config.GHOST_ORDER.has(gn) or used_ghosts.has(gn):
 			gn = _next_free_ghost_name(used_ghosts)
 		used_ghosts[gn] = true
+		human_ghost_names.append(gn)
 		roster_out.append({
 			"id": str(pl.get("id", "g_" + gn)),
 			"name": str(pl.get("name", "JUGADOR")),
@@ -1459,14 +1474,18 @@ func build_start_payload() -> Dictionary:
 			"ai": false,
 			"connected": true,
 		})
+	for gn in human_ghost_names:
+		active_ghosts.append(gn)
 
-	# 0 bots + fantasmas humanos: solo existen esos fantasmas.
-	# Sin fantasmas humanos (o con bots) se completa la banda clásica con IA.
-	var active_ghosts: Array = []
-	var fill_ai_ghosts: bool = human_ghosts.is_empty() or bot_count > 0
+	var added_ghost_bots := 0
 	for gn in Config.GHOST_ORDER:
-		if used_ghosts.has(gn) or fill_ai_ghosts:
-			active_ghosts.append(gn)
+		if added_ghost_bots >= ghost_bot_count:
+			break
+		if used_ghosts.has(gn):
+			continue
+		used_ghosts[gn] = true
+		active_ghosts.append(gn)
+		added_ghost_bots += 1
 
 	var pac_count := human_pacs.size() + bot_count
 	var mode_now := MODE_TEAM if pac_count >= 4 and human_ghosts.is_empty() else MODE_GHOST
