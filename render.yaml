@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: pacman-online
+    runtime: node
+    plan: free
+    buildCommand: npm --prefix server install
+    startCommand: node server/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

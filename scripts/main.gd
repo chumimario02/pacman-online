@@ -1,0 +1,1835 @@
+extends Node2D
+
+const HIGHSCORE_PATH := "user://highscore.json"
+const GHOST_NAMES := ["blinky", "pinky", "inky", "clyde"]
+const MODE_TEAM := "team"
+const MODE_GHOST := "ghost"
+const MAX_PLAYERS := Config.MAX_PLAYERS
+
+var audio
+var maze
+var state := Config.LOBBY
+var paused := false
+var time := 0.0
+var menu_time := 0.0
+
+var high_score := 0
+var score := 0
+var lives := 3
+var level := 1
+var next_extra := 10000
+
+var pacs: Array = []
+var pac = null
+var ghosts: Array = []
+var mode := "scatter"
+var mode_idx := 0
+var mode_timer := 7.0
+var frightened := false
+var fright_timer := 0.0
+var ghost_combo := 0
+var freeze_timer := 0.0
+
+var ready_timer := 0.0
+var death_timer := 0.0
+var level_timer := 0.0
+var gameover_timer := 0.0
+
+var popups: Array = []
+var particles: Array = []
+var shake := 0.0
+
+var fruit_active := false
+var fruit_timer := 0.0
+var fruit_history: Array = []
+var fruit_thresholds := [false, false]
+var pellets_eaten := 0
+var waka_toggle := false
+
+var sheet: Texture2D
+var power_texture: Texture2D
+var bg_texture: Texture2D
+var scanlines_texture: Texture2D
+var fruit_glow_texture: Texture2D
+var pac_frames: SpriteFrames
+var ghost_frames: Dictionary = {}
+var fruit_level_textures: Array = []
+
+var world: Node2D
+var maze_view
+var effects
+var hud
+var fruit_sprite: Sprite2D
+var fruit_glow: Sprite2D
+var suppress_save := false
+var smoke_ok := true
+var smoke_running := false
+
+# ------------------------------------------------------------------ online
+var net: NetClient
+var lobby
+var touch_ui
+var online_role := "offline"   # offline | host | client
+var online_mode := MODE_TEAM
+var roster: Array = []
+var local_player_id := ""
+var dying_player := ""
+var winner := ""
+var touch_enabled := false
+var snapshot_accum := 0.0
+var snapshot_full := true
+var eaten_delta: Array = []
+var net_events: Array = []
+var client_snapshot_seen := false
+var client_paused := false
+
+func _ready() -> void:
+	randomize()
+	_load_high()
+	_load_assets()
+	_build_frames()
+	_build_fruit_textures()
+
+	audio = GameAudio.new()
+	audio.name = "Audio"
+	add_child(audio)
+
+	if bg_texture:
+		var bg := Sprite2D.new()
+		bg.name = "Background"
+		bg.texture = bg_texture
+		bg.centered = false
+		bg.z_index = -100
+		add_child(bg)
+
+	world = Node2D.new()
+	world.name = "World"
+	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
+	add_child(world)
+
+	maze = Maze.new()
+	maze_view = MazeView.new()
+	maze_view.name = "MazeView"
+	maze_view.game = self
+	maze_view.maze = maze
+	world.add_child(maze_view)
+
+	_create_fruit()
+
+	effects = Effects.new()
+	effects.name = "Effects"
+	effects.game = self
+	effects.z_index = 10
+	world.add_child(effects)
+
+	_create_hud()
+	_create_online_ui()
+	_setup_level(true, true)
+	state = Config.LOBBY
+	paused = false
+	world.visible = false
+	hud.visible = false
+
+	if scanlines_texture:
+		var scan_layer := CanvasLayer.new()
+		scan_layer.name = "Scanlines"
+		scan_layer.layer = 20
+		add_child(scan_layer)
+		var scan := Sprite2D.new()
+		scan.texture = scanlines_texture
+		scan.centered = false
+		scan_layer.add_child(scan)
+
+	_position_window.call_deferred()
+	_connect_network()
+	if lobby:
+		lobby.show_lobby()
+		lobby.set_connected(net != null and net.status == "online")
+	if DisplayServer.is_touchscreen_available():
+		touch_enabled = true
+	_update_touch_visibility()
+	if "--smoke" in OS.get_cmdline_user_args():
+		_run_smoke.call_deferred()
+	if "--online-smoke" in OS.get_cmdline_user_args():
+		_run_online_smoke.call_deferred()
+
+# -------------------------------------------------------------------- setup
+func _load_assets() -> void:
+	if ResourceLoader.exists("res://assets/sprites32.png"):
+		sheet = load("res://assets/sprites32.png")
+	if ResourceLoader.exists("res://assets/power.png"):
+		power_texture = load("res://assets/power.png")
+	if ResourceLoader.exists("res://assets/bg.png"):
+		bg_texture = load("res://assets/bg.png")
+	if ResourceLoader.exists("res://assets/scanlines.png"):
+		scanlines_texture = load("res://assets/scanlines.png")
+	if ResourceLoader.exists("res://assets/fruit_glow.png"):
+		fruit_glow_texture = load("res://assets/fruit_glow.png")
+
+func _build_frames() -> void:
+	if sheet == null:
+		pac_frames = SpriteFrames.new()
+		return
+	pac_frames = SpriteFrames.new()
+	pac_frames.add_animation("chomp")
+	for col in [0, 1, 2, 1]:
+		pac_frames.add_frame("chomp", _atlas(col, 0))
+	pac_frames.set_animation_loop("chomp", true)
+	pac_frames.set_animation_speed("chomp", 16.0)
+
+	ghost_frames.clear()
+	for n in GHOST_NAMES:
+		var row: int = Config.GHOST_ROWS[n]
+		var sf := SpriteFrames.new()
+		_add_anim(sf, "right", [0, 1], row, 7.0, true)
+		_add_anim(sf, "left", [2, 3], row, 7.0, true)
+		_add_anim(sf, "up", [4, 5], row, 7.0, true)
+		_add_anim(sf, "down", [6, 7], row, 7.0, true)
+		_add_anim(sf, "fright", [0, 1], 7, 7.0, true)
+		_add_anim(sf, "flash", [2, 3], 7, 7.0, true)
+		_add_anim(sf, "eyes_left", [0], 6, 1.0, false)
+		_add_anim(sf, "eyes_down", [2], 6, 1.0, false)
+		_add_anim(sf, "eyes_right", [4], 6, 1.0, false)
+		_add_anim(sf, "eyes_up", [6], 6, 1.0, false)
+		ghost_frames[n] = sf
+
+func _add_anim(sf: SpriteFrames, anim: String, cols: Array, row: int, speed: float, loop: bool) -> void:
+	sf.add_animation(anim)
+	for col in cols:
+		sf.add_frame(anim, _atlas(col, row))
+	sf.set_animation_speed(anim, speed)
+	sf.set_animation_loop(anim, loop)
+
+func _atlas(col: int, row: int) -> AtlasTexture:
+	var t := AtlasTexture.new()
+	t.atlas = sheet
+	t.region = Rect2(col * 32, row * 32, 32, 32)
+	return t
+
+func _build_fruit_textures() -> void:
+	fruit_level_textures.clear()
+	if sheet == null:
+		return
+	for col in Config.FRUIT_COLUMNS:
+		fruit_level_textures.append(_atlas(col, 8))
+
+func _create_fruit() -> void:
+	fruit_glow = Sprite2D.new()
+	fruit_glow.name = "FruitGlow"
+	fruit_glow.texture = fruit_glow_texture
+	fruit_glow.centered = false
+	fruit_glow.z_index = 1
+	if fruit_glow_texture:
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		fruit_glow.material = mat
+	world.add_child(fruit_glow)
+
+	fruit_sprite = Sprite2D.new()
+	fruit_sprite.name = "Fruit"
+	fruit_sprite.centered = false
+	fruit_sprite.z_index = 2
+	world.add_child(fruit_sprite)
+	fruit_sprite.visible = false
+	fruit_glow.visible = false
+
+func _create_hud() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "HudLayer"
+	layer.layer = 10
+	add_child(layer)
+	hud = Hud.new()
+	hud.name = "Hud"
+	hud.game = self
+	hud.position = Vector2.ZERO
+	hud.size = Vector2(Config.WIDTH, Config.HEIGHT)
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(hud)
+
+func _create_online_ui() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "OnlineLayer"
+	layer.layer = 30
+	add_child(layer)
+
+	lobby = Lobby.new()
+	lobby.name = "Lobby"
+	lobby.game = self
+	lobby.position = Vector2.ZERO
+	lobby.size = Vector2(Config.WIDTH, Config.HEIGHT)
+	layer.add_child(lobby)
+	lobby.hide()
+
+	touch_ui = TouchControls.new()
+	touch_ui.name = "TouchControls"
+	touch_ui.game = self
+	touch_ui.position = Vector2.ZERO
+	touch_ui.size = Vector2(Config.WIDTH, Config.HEIGHT)
+	touch_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(touch_ui)
+	touch_ui.hide()
+
+func _position_window() -> void:
+	if OS.has_feature("web"):
+		return
+	if DisplayServer.get_name() == "headless":
+		return
+	var screen := DisplayServer.window_get_current_screen()
+	var usable := DisplayServer.screen_get_usable_rect(screen)
+	var client_pos := DisplayServer.window_get_position()
+	var outer_pos := DisplayServer.window_get_position_with_decorations()
+	var outer_size := DisplayServer.window_get_size_with_decorations()
+	var decor_offset := client_pos - outer_pos
+	var target := usable.position + Vector2i(
+		int((usable.size.x - outer_size.x) * 0.5),
+		int((usable.size.y - outer_size.y) * 0.5))
+	target.x = maxi(target.x, usable.position.x)
+	target.y = maxi(target.y, usable.position.y)
+	DisplayServer.window_set_position(target + decor_offset)
+
+func _spawn_actors() -> void:
+	var old_stats: Dictionary = {}
+	for p in pacs:
+		if p != null and is_instance_valid(p):
+			old_stats[p.player_id] = {"score": p.score, "lives": p.lives}
+
+	_clear_actors()
+
+	if roster.is_empty():
+		pac = PacMan.new()
+		pac.name = "PacMan"
+		pac.setup(maze, pac_frames, "local", "yellow", Config.START_TILE)
+		pac.player_name = "TÚ"
+		if old_stats.has("local"):
+			pac.score = int(old_stats["local"]["score"])
+			pac.lives = int(old_stats["local"]["lives"])
+		else:
+			pac.score = 0
+			pac.lives = lives
+		pac.z_index = 5
+		world.add_child(pac)
+		pacs.append(pac)
+	else:
+		var pac_entries: Array = []
+		for e in roster:
+			if str(e.get("role", "")) == "pac":
+				pac_entries.append(e)
+		pac_entries.sort_custom(func(a, b): return int(a.get("pac_index", 0)) < int(b.get("pac_index", 0)))
+		for e in pac_entries:
+			var idx: int = int(e.get("pac_index", 0))
+			var spawn: Vector2i = Config.PAC_STARTS[idx % Config.PAC_STARTS.size()]
+			var p := PacMan.new()
+			p.name = "Pac_" + str(e.get("id", idx))
+			p.setup(maze, pac_frames, str(e.get("id", "")), str(e.get("color", "yellow")), spawn)
+			p.player_name = str(e.get("name", "JUGADOR"))
+			p.is_ai = bool(e.get("ai", false))
+			p.connected = bool(e.get("connected", true))
+			if old_stats.has(p.player_id):
+				p.score = int(old_stats[p.player_id]["score"])
+				p.lives = int(old_stats[p.player_id]["lives"])
+			p.z_index = 5
+			world.add_child(p)
+			pacs.append(p)
+			if p.player_id == local_player_id:
+				pac = p
+		if pac == null and not pacs.is_empty():
+			pac = pacs[0]
+
+	ghosts = []
+	for n in GHOST_NAMES:
+		var g := Ghost.new()
+		g.name = n
+		g.setup(self, maze, n, ghost_frames[n])
+		g.z_index = 4
+		var assigned = null
+		for e in roster:
+			if str(e.get("role", "")) == "ghost" and str(e.get("ghost_name", "")) == n:
+				assigned = e
+				break
+		if assigned != null:
+			g.set_player(str(assigned.get("id", "")), str(assigned.get("name", "")))
+			g.connected = bool(assigned.get("connected", true))
+			if old_stats.has(g.player_id):
+				g.score = int(old_stats[g.player_id].get("score", 0))
+		world.add_child(g)
+		ghosts.append(g)
+
+func _clear_actors() -> void:
+	for p in pacs:
+		if p != null and is_instance_valid(p):
+			if smoke_running:
+				p.free()
+			else:
+				p.queue_free()
+	pacs.clear()
+	pac = null
+	for g in ghosts:
+		if is_instance_valid(g):
+			if smoke_running:
+				g.free()
+			else:
+				g.queue_free()
+	ghosts.clear()
+
+func _reset_round_state() -> void:
+	mode = "scatter"
+	mode_idx = 0
+	mode_timer = Config.MODE_SCHEDULE[0][0]
+	frightened = false
+	fright_timer = 0.0
+	ghost_combo = 0
+	freeze_timer = 0.0
+	pellets_eaten = 0
+	fruit_active = false
+	fruit_timer = 0.0
+	fruit_thresholds = [false, false]
+	ready_timer = Config.ONLINE_READY_TIME if online_role != "offline" else Config.READY_TIME
+	death_timer = 0.0
+	gameover_timer = 0.0
+	shake = 0.0
+	dying_player = ""
+	winner = ""
+
+func _setup_level(new_game := false, silent := false) -> void:
+	maze.reset()
+	_spawn_actors()
+	_reset_round_state()
+	state = Config.READY
+	paused = false
+	if new_game:
+		fruit_history = []
+	if not silent:
+		audio.play("intro" if new_game else "start")
+	world.visible = true
+	snapshot_full = true
+
+func _reset_after_death(p) -> void:
+	if p == null:
+		state = Config.PLAYING
+		return
+	p.respawn(p.spawn_tile)
+	mode = "scatter"
+	mode_idx = 0
+	mode_timer = Config.MODE_SCHEDULE[0][0]
+	frightened = false
+	fright_timer = 0.0
+	ghost_combo = 0
+	freeze_timer = 0.0
+	fruit_active = false
+	ready_timer = 1.2
+	death_timer = 0.0
+	shake = 0.0
+	state = Config.READY
+	audio.stop_loop()
+	audio.play("start", 0.7)
+	world.visible = true
+
+func start_new_game() -> void:
+	score = 0
+	lives = 3
+	level = 1
+	next_extra = 10000
+	popups = []
+	particles = []
+	audio.stop_all()
+	_clear_actors()
+	_setup_level(true)
+
+func start_local_practice() -> void:
+	online_role = "offline"
+	online_mode = MODE_TEAM
+	roster = []
+	local_player_id = "local"
+	dying_player = ""
+	winner = ""
+	lobby.hide_lobby()
+	hud.visible = true
+	start_new_game()
+	_update_touch_visibility()
+
+func go_menu() -> void:
+	high_score = maxi(high_score, score)
+	save_high()
+	state = Config.LOBBY
+	paused = false
+	menu_time = 0.0
+	world.visible = false
+	hud.visible = false
+	if lobby:
+		lobby.show_lobby()
+	audio.stop_all()
+
+# ------------------------------------------------------------------- update
+func _process(delta: float) -> void:
+	var dt := minf(delta, 0.05)
+	time += dt
+	_update_effects(dt)
+
+	if state == Config.LOBBY:
+		menu_time += dt
+		return
+	if online_role == "client":
+		_client_process(dt)
+		return
+	if state == Config.GAME_OVER:
+		gameover_timer += dt
+	elif not paused:
+		if state == Config.READY:
+			ready_timer -= dt
+			if ready_timer <= 0.0:
+				state = Config.PLAYING
+				audio.set_loop("siren", 0.42)
+		elif state == Config.PLAYING:
+			_update_play(dt)
+		elif state == Config.DYING:
+			death_timer -= dt
+			if death_timer <= 0.0:
+				_after_death()
+		elif state == Config.LEVEL_CLEAR:
+			level_timer -= dt
+			if level_timer <= 0.0:
+				level += 1
+				_setup_level()
+				if online_role == "host":
+					_host_send_snapshot(true)
+	_sync_visuals()
+
+	if online_role == "host":
+		snapshot_accum += dt
+		if snapshot_accum >= Config.NET_TICK:
+			snapshot_accum = 0.0
+			_host_send_snapshot()
+
+func _client_process(dt: float) -> void:
+	for p in pacs:
+		if p != null and is_instance_valid(p):
+			p.interpolate_network(dt)
+	for g in ghosts:
+		if g != null and is_instance_valid(g):
+			g.interpolate_network(dt)
+	_sync_visuals_client()
+
+func _update_play(dt: float) -> void:
+	if freeze_timer > 0.0:
+		freeze_timer -= dt
+		return
+
+	_update_mode(dt)
+	if frightened:
+		fright_timer -= dt
+		if fright_timer <= 0.0:
+			_end_fright()
+
+	for p in pacs:
+		if p == null or not p.active:
+			continue
+		if p.is_ai:
+			_ai_pac_update(p, dt)
+		else:
+			p.update_pac(dt)
+		for tile in p.take_arrivals():
+			_eat(p, tile)
+
+	for g in ghosts:
+		g.update_ghost(dt)
+	_update_fruit(dt)
+	if _check_collisions():
+		return
+
+	if maze.remaining() == 0:
+		_start_level_clear()
+		return
+
+	if frightened:
+		audio.set_loop("fright", 0.50)
+	else:
+		audio.set_loop("siren", 0.42)
+
+func _update_mode(dt: float) -> void:
+	if frightened:
+		return
+	mode_timer -= dt
+	if mode_timer > 0.0:
+		return
+	mode_idx += 1
+	if mode_idx < Config.MODE_SCHEDULE.size():
+		var entry = Config.MODE_SCHEDULE[mode_idx]
+		mode_timer = entry[0]
+		mode = entry[1]
+	else:
+		mode = "chase"
+		mode_timer = Config.CHASE_FOREVER
+	for g in ghosts:
+		g.reverse()
+
+func _ai_pac_update(p, dt: float) -> void:
+	if p.progress <= 1e-9 or p.desired == null:
+		var best = null
+		var best_d := 99999
+		for d in Config.DIR_ORDER:
+			var nt = maze.neighbor(p.tile, d)
+			if not maze.is_walkable(nt, true):
+				continue
+			if p.dir != null and d == Vector2i(-p.dir.x, -p.dir.y):
+				continue
+			var dd: int = maze.distance_to_nearest_pellet(nt)
+			if dd < best_d:
+				best_d = dd
+				best = d
+		if best != null:
+			p.desired = best
+	p.update_pac(dt)
+
+# -------------------------------------------------------------------- rules
+func add_score(points: int, p = null) -> void:
+	score += points
+	if p != null:
+		p.score += points
+	if score > high_score:
+		high_score = score
+	while score >= next_extra:
+		if p != null:
+			p.lives += 1
+		else:
+			lives += 1
+		next_extra += 10000
+		audio.play("extra", 0.7)
+		if p != null:
+			var pp: Vector2 = p.pos()
+			popup(pp.x, pp.y - 8.0, "1UP", Config.GREEN, 10)
+		if online_role == "host":
+			net_events.append({"t": "extra"})
+
+func _eat(p, tile: Vector2i) -> void:
+	var value: int = maze.eat(tile)
+	if value == 0:
+		return
+	pellets_eaten += 1
+	if online_role == "host":
+		eaten_delta.append([tile.x, tile.y])
+	if value >= 50:
+		add_score(50, p)
+		audio.play("power", 0.7)
+		frightened = true
+		fright_timer = maxf(2.0, 8.0 - (level - 1) * 0.6)
+		ghost_combo = 0
+		for g in ghosts:
+			g.set_frightened(true)
+		for g in ghosts:
+			if g.state in ["normal", "leaving"]:
+				g.reverse()
+		shake = maxf(shake, 0.12)
+		if online_role == "host":
+			net_events.append({"t": "power"})
+	else:
+		add_score(10, p)
+		audio.play_waka(waka_toggle)
+		if online_role == "host":
+			net_events.append({"t": "waka", "alt": waka_toggle})
+		waka_toggle = not waka_toggle
+	_check_fruit_spawn()
+
+func _end_fright() -> void:
+	frightened = false
+	fright_timer = 0.0
+	ghost_combo = 0
+	for g in ghosts:
+		g.set_frightened(false)
+
+func _check_fruit_spawn() -> void:
+	var thresholds := [70, 170]
+	for i in range(2):
+		if not fruit_thresholds[i] and pellets_eaten >= thresholds[i]:
+			fruit_thresholds[i] = true
+			fruit_active = true
+			fruit_timer = Config.FRUIT_TIME
+			audio.play("fruit", 0.5)
+
+func _update_fruit(dt: float) -> void:
+	if not fruit_active:
+		return
+	fruit_timer -= dt
+	if fruit_timer <= 0.0:
+		fruit_active = false
+		return
+	var fx: Vector2 = maze.center(Config.FRUIT_TILE)
+	for p in pacs:
+		if p == null or not p.active:
+			continue
+		var px: Vector2 = p.pos()
+		if px.distance_squared_to(fx) < 15.0 * 15.0:
+			var idx: int = mini(level - 1, 7)
+			var pts: int = Config.FRUIT_SCORE[idx]
+			add_score(pts, p)
+			popup(fx.x, fx.y - 6.0, str(pts), Config.PINK, 8)
+			_burst(fx.x, fx.y, Config.PINK, 16)
+			fruit_active = false
+			audio.play("fruit", 0.7)
+			if fruit_history.size() < 8:
+				fruit_history.append(Config.FRUIT_COLUMNS[idx])
+			if online_role == "host":
+				net_events.append({
+					"t": "fruit", "x": fx.x, "y": fx.y, "pts": pts,
+					"col": Config.FRUIT_COLUMNS[idx],
+				})
+			break
+
+func _check_collisions() -> bool:
+	for p in pacs:
+		if p == null or not p.active:
+			continue
+		var ppos: Vector2 = p.pos()
+		for g in ghosts:
+			if g.state in ["eaten", "dead", "house"]:
+				continue
+			var gpos: Vector2 = g.pos()
+			if ppos.distance_squared_to(gpos) > 12.5 * 12.5:
+				continue
+			if g.is_edible():
+				_eat_ghost(p, g)
+				return true
+			_die(p, g)
+			return true
+	return false
+
+func _eat_ghost(p, g) -> void:
+	var points := 200 * int(pow(2, mini(ghost_combo, 3)))
+	ghost_combo += 1
+	add_score(points, p)
+	var gp: Vector2 = g.pos()
+	popup(gp.x, gp.y - 6.0, str(points), Config.CYAN, 8)
+	_burst(gp.x, gp.y, Config.CYAN, 16)
+	g.eaten_by_player()
+	audio.play("eatghost", 0.7)
+	shake = maxf(shake, 0.18)
+	freeze_timer = 0.42
+	if online_role == "host":
+		net_events.append({"t": "ghost", "x": gp.x, "y": gp.y, "pts": points})
+
+func _die(p, g = null) -> void:
+	if p == null or not p.active:
+		return
+	p.lives -= 1
+	lives = p.lives
+	if g != null and g.is_player:
+		g.score += Config.GHOST_CATCH_SCORE
+	state = Config.DYING
+	death_timer = Config.DEATH_TIME
+	dying_player = p.player_id
+	paused = false
+	audio.stop_loop()
+	audio.play("death", 0.8)
+	shake = 0.6
+	freeze_timer = 0.0
+	if online_role == "host":
+		var pp: Vector2 = p.pos()
+		net_events.append({
+			"t": "death", "x": pp.x, "y": pp.y, "pid": p.player_id,
+			"gid": g.player_id if g != null else "",
+		})
+
+func _after_death() -> void:
+	var p = _find_pac_by_id(dying_player)
+	if p == null:
+		state = Config.PLAYING
+		dying_player = ""
+		return
+	if p.lives > 0:
+		_reset_after_death(p)
+		dying_player = ""
+		return
+	p.active = false
+	p.visible = false
+	dying_player = ""
+	var any_active := false
+	for q in pacs:
+		if q.active:
+			any_active = true
+			break
+	if not any_active:
+		_game_over("ghosts" if online_mode == MODE_GHOST else "")
+	else:
+		state = Config.PLAYING
+		audio.set_loop("siren", 0.42)
+
+func _start_level_clear() -> void:
+	state = Config.LEVEL_CLEAR
+	level_timer = Config.LEVEL_CLEAR_TIME
+	fruit_active = false
+	audio.stop_loop()
+	audio.play("extra", 0.7)
+	shake = 0.0
+	if online_role == "host":
+		net_events.append({"t": "levelclear"})
+
+func _game_over(winning_side := "") -> void:
+	state = Config.GAME_OVER
+	gameover_timer = 0.0
+	winner = winning_side
+	high_score = maxi(high_score, score)
+	save_high()
+	audio.stop_all()
+	if online_role == "host":
+		net_events.append({"t": "gameover", "winner": winning_side})
+		_host_send_snapshot(true)
+
+# ----------------------------------------------------------------------- IA
+func _active_pacs() -> Array:
+	var out: Array = []
+	for p in pacs:
+		if p != null and p.active:
+			out.append(p)
+	return out
+
+func _target_pac(g):
+	var active := _active_pacs()
+	if active.is_empty():
+		return null
+	var idx: int = GHOST_NAMES.find(g.ghost_name)
+	if idx < 0:
+		idx = 0
+	return active[idx % active.size()]
+
+func ghost_target(g) -> Vector2i:
+	if mode == "scatter":
+		var st: Vector2i = Config.SCATTER_TARGETS[g.ghost_name]
+		return st
+	var target = _target_pac(g)
+	if target == null:
+		return Config.SCATTER_TARGETS[g.ghost_name]
+	var pt: Vector2i = target.tile
+	var d: Vector2i = target.dir if target.dir != null else Vector2i(-1, 0)
+	if g.ghost_name == "blinky":
+		return pt
+	if g.ghost_name == "pinky":
+		return pt + d * 4
+	if g.ghost_name == "inky":
+		var b: Vector2i = ghosts[0].tile if ghosts.size() > 0 else Config.HOUSE_EXIT
+		var p2: Vector2i = pt + d * 2
+		return p2 * 2 - b
+	var dx: int = g.tile.x - pt.x
+	var dy: int = g.tile.y - pt.y
+	if dx * dx + dy * dy > 64:
+		return pt
+	var ct: Vector2i = Config.SCATTER_TARGETS["clyde"]
+	return ct
+
+func _find_pac_by_id(pid: String):
+	for p in pacs:
+		if p != null and p.player_id == pid:
+			return p
+	return null
+
+func _find_ghost_by_id(pid: String):
+	for g in ghosts:
+		if g != null and g.player_id == pid:
+			return g
+	return null
+
+func _local_pac():
+	if local_player_id == "":
+		return pac
+	return _find_pac_by_id(local_player_id)
+
+func _local_ghost():
+	if local_player_id == "":
+		return null
+	return _find_ghost_by_id(local_player_id)
+
+# -------------------------------------------------------------------- effect
+func popup(x: float, y: float, text: String, color: Color, size := 8) -> void:
+	popups.append({"x": x, "y": y, "text": text, "color": color, "size": size, "life": 1.0})
+
+func _burst(x: float, y: float, color: Color, count := 12) -> void:
+	for i in range(count):
+		var ang := randf() * TAU
+		var spd := randf_range(25.0, 95.0)
+		particles.append({
+			"x": x, "y": y,
+			"vx": cos(ang) * spd, "vy": sin(ang) * spd,
+			"life": randf_range(0.35, 0.7), "max": 0.7,
+			"color": color, "size": [1, 2, 2, 3][randi() % 4],
+		})
+
+func _update_effects(dt: float) -> void:
+	for p in popups:
+		p["life"] -= dt
+		p["y"] -= 20.0 * dt
+	var keep: Array = []
+	for p in popups:
+		if p["life"] > 0.0:
+			keep.append(p)
+	popups = keep
+
+	for p in particles:
+		p["life"] -= dt
+		p["x"] += p["vx"] * dt
+		p["y"] += p["vy"] * dt
+		p["vy"] += 60.0 * dt
+		p["vx"] *= 0.985
+	var keep2: Array = []
+	for p in particles:
+		if p["life"] > 0.0:
+			keep2.append(p)
+	particles = keep2
+
+	if shake > 0.0:
+		shake = maxf(0.0, shake - dt * 1.4)
+
+func _shake_offset() -> Vector2:
+	if shake <= 0.0:
+		return Vector2.ZERO
+	var amp := minf(7.0, shake * 11.0)
+	return Vector2(sin(time * 93.0) * amp, cos(time * 71.0) * amp)
+
+func _animate_death(p) -> void:
+	var prog := clampf((Config.DEATH_TIME - death_timer) / 1.55, 0.0, 1.0)
+	p.position = p.pos()
+	p.frame = 0
+	p.pause()
+	if prog < 0.01:
+		p.scale = Vector2.ONE
+		p.rotation = 0.0
+		p.modulate.a = 1.0
+	else:
+		p.rotation = deg_to_rad(prog * 540.0)
+		p.scale = Vector2.ONE * maxf(0.06, 1.0 - prog)
+		p.modulate.a = 1.0 - prog * 0.55
+
+func _sync_visuals() -> void:
+	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y) + _shake_offset()
+
+	for p in pacs:
+		if p == null or not is_instance_valid(p):
+			continue
+		p.visible = p.active and state != Config.GAME_OVER
+		if not p.visible:
+			continue
+		if state == Config.DYING and p.player_id == dying_player:
+			_animate_death(p)
+		else:
+			p.scale = Vector2.ONE
+			p.modulate = Color.WHITE
+			p.sync_visual()
+
+	for g in ghosts:
+		if not is_instance_valid(g):
+			continue
+		g.visible = not (state in [Config.DYING, Config.GAME_OVER])
+		if g.visible:
+			g.sync_visual()
+
+	_sync_fruit()
+
+func _sync_visuals_client() -> void:
+	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y) + _shake_offset()
+	for p in pacs:
+		if p == null or not is_instance_valid(p):
+			continue
+		p.visible = p.active and state != Config.GAME_OVER
+		if not p.visible:
+			continue
+		if state == Config.DYING and p.player_id == dying_player:
+			_animate_death(p)
+		else:
+			p.scale = Vector2.ONE
+			p.modulate = Color.WHITE
+	for g in ghosts:
+		if g == null or not is_instance_valid(g):
+			continue
+		g.visible = g.net_visible and not (state in [Config.DYING, Config.GAME_OVER])
+	_sync_fruit()
+
+func _sync_fruit() -> void:
+	if fruit_active and fruit_sprite != null and fruit_glow != null:
+		var idx: int = mini(level - 1, 7)
+		if idx < fruit_level_textures.size():
+			fruit_sprite.texture = fruit_level_textures[idx]
+		var fp: Vector2 = maze.center(Config.FRUIT_TILE)
+		fp.y += sin(time * 4.0) * 2.0
+		fruit_sprite.position = fp - Vector2(16, 16)
+		fruit_glow.position = fp - Vector2(26, 26)
+		var blink := fruit_timer < 2.4 and int(time * 8.0) % 2 == 0
+		fruit_sprite.visible = not blink
+		fruit_glow.visible = not blink
+		var a := (55.0 + 30.0 * (0.5 + 0.5 * sin(time * 5.0))) / 255.0
+		fruit_glow.modulate = Color(1, 1, 1, a)
+	else:
+		if fruit_sprite != null:
+			fruit_sprite.visible = false
+		if fruit_glow != null:
+			fruit_glow.visible = false
+
+# --------------------------------------------------------------------- input
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		_handle_key(event.keycode, event.physical_keycode)
+
+func _start_key(k: int) -> bool:
+	return k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_SPACE
+
+func _handle_key(k: int, pk: int) -> void:
+	if k == KEY_M or pk == KEY_M:
+		_toggle_mute()
+		return
+
+	if state == Config.LOBBY:
+		return
+
+	if state == Config.GAME_OVER:
+		if online_role in ["offline", "host"] and (_start_key(k) or _start_key(pk)):
+			if online_role == "host":
+				_restart_online()
+			else:
+				start_local_practice()
+		elif k == KEY_ESCAPE:
+			_return_to_lobby()
+		return
+
+	if paused:
+		if k == KEY_ESCAPE and online_role == "client":
+			_return_to_lobby()
+			return
+		if k == KEY_P or k == KEY_ESCAPE:
+			toggle_pause()
+		return
+
+	if k == KEY_P:
+		toggle_pause()
+		return
+	if k == KEY_ESCAPE:
+		_return_to_lobby()
+		return
+
+	if state in [Config.READY, Config.PLAYING]:
+		if k == KEY_LEFT or k == KEY_A or pk == KEY_A:
+			set_local_dir("left")
+		elif k == KEY_RIGHT or k == KEY_D or pk == KEY_D:
+			set_local_dir("right")
+		elif k == KEY_UP or k == KEY_W or pk == KEY_W:
+			set_local_dir("up")
+		elif k == KEY_DOWN or k == KEY_S or pk == KEY_S:
+			set_local_dir("down")
+
+func set_local_dir(dir_name: String) -> void:
+	if not Config.DIRS.has(dir_name):
+		return
+	if online_role == "client":
+		net.send_dict({"type": "input", "data": {"dir": dir_name}})
+		return
+	var d = Config.DIRS[dir_name]
+	var p = _local_pac()
+	if p != null and p.active:
+		p.desired = d
+	var g = _local_ghost()
+	if g != null and g.state in ["normal", "leaving"]:
+		g.desired_dir = d
+
+func toggle_pause() -> void:
+	if online_role == "client":
+		return
+	if not (state in [Config.PLAYING, Config.READY]):
+		return
+	paused = not paused
+	if paused:
+		audio.stop_loop()
+	elif state == Config.PLAYING:
+		audio.set_loop("fright" if frightened else "siren", 0.42)
+
+func _toggle_mute() -> void:
+	audio.toggle_mute()
+	if not audio.muted and state == Config.PLAYING and not paused:
+		audio.set_loop("fright" if frightened else "siren", 0.42)
+
+func _quit_game() -> void:
+	high_score = maxi(high_score, score)
+	save_high()
+	if audio != null:
+		audio.stop_all()
+	if net != null:
+		net.close()
+	get_tree().quit()
+
+# ------------------------------------------------------------------ online
+func _connect_network() -> void:
+	net = NetClient.new()
+	net.name = "Net"
+	net.connected.connect(_on_net_connected)
+	net.disconnected.connect(_on_net_disconnected)
+	net.welcome.connect(_on_net_welcome)
+	net.room_updated.connect(_on_room_updated)
+	net.started.connect(_on_net_started)
+	net.snapshot.connect(_on_net_snapshot)
+	net.input_received.connect(_on_net_input)
+	net.room_closed.connect(_on_room_closed)
+	net.lobby_return.connect(_on_lobby_return)
+	net.peer_left.connect(_on_peer_left)
+	net.error_message.connect(_on_net_error)
+	add_child(net)
+
+func _on_net_connected() -> void:
+	if lobby:
+		lobby.set_connected(true)
+
+func _on_net_disconnected() -> void:
+	if lobby:
+		lobby.set_connected(false)
+		lobby.set_status("DESCONECTADO. RECONECTANDO...", Config.RED)
+	if state != Config.LOBBY and online_role != "offline":
+		if lobby:
+			lobby.reset_room()
+		_reset_to_lobby("CONEXION PERDIDA. VUELVE A ENTRAR.")
+
+func _on_net_welcome(player_id: String, host_id: String, room_code: String) -> void:
+	local_player_id = player_id
+	if lobby:
+		lobby.on_welcome(player_id, host_id, room_code)
+
+func _on_room_updated(room: Dictionary) -> void:
+	if lobby:
+		lobby.on_room(room)
+	if online_role == "host" and state != Config.LOBBY:
+		_mark_connections(room)
+
+func _mark_connections(room: Dictionary) -> void:
+	var connected_ids := {}
+	for p in room.get("players", []):
+		connected_ids[str(p.get("id", ""))] = true
+	for p in pacs:
+		if p != null and p.player_id != "" and not p.player_id.begins_with("ai_"):
+			p.connected = connected_ids.has(p.player_id)
+			if not p.connected:
+				p.is_ai = true
+	for g in ghosts:
+		if g != null and g.player_id != "" and not g.player_id.begins_with("ai_"):
+			g.connected = connected_ids.has(g.player_id)
+			if not g.connected:
+				g.desired_dir = null
+
+func _on_net_started(data: Dictionary) -> void:
+	if online_role == "host":
+		return
+	if data.is_empty():
+		return
+	_begin_online(data, false)
+
+func _on_net_snapshot(data: Dictionary) -> void:
+	if online_role != "client":
+		return
+	_apply_snapshot(data)
+
+func _on_net_input(msg: Dictionary) -> void:
+	if online_role != "host":
+		return
+	var pid := str(msg.get("playerId", ""))
+	var data = msg.get("data", {})
+	if typeof(data) != TYPE_DICTIONARY:
+		return
+	var dname := str(data.get("dir", ""))
+	if not Config.DIRS.has(dname):
+		return
+	var p = _find_pac_by_id(pid)
+	if p != null and p.active:
+		p.desired = Config.DIRS[dname]
+	var g = _find_ghost_by_id(pid)
+	if g != null and g.state in ["normal", "leaving"]:
+		g.desired_dir = Config.DIRS[dname]
+
+func _on_room_closed(reason: String) -> void:
+	if lobby:
+		lobby.reset_room()
+		lobby.set_status("SALA CERRADA (%s)" % reason, Config.RED)
+	_reset_to_lobby("")
+
+func _on_lobby_return() -> void:
+	_reset_to_lobby("")
+
+func _on_peer_left(pid: String) -> void:
+	if lobby:
+		lobby.set_status("UN JUGADOR SALIÓ", Config.ORANGE)
+
+func _on_net_error(text: String) -> void:
+	if lobby:
+		lobby.set_status(text, Config.RED)
+
+func build_start_payload() -> Dictionary:
+	var players: Array = []
+	if lobby != null and lobby.room is Dictionary:
+		players = lobby.room.get("players", [])
+	var mode_now := str(lobby.selected_mode) if lobby else MODE_TEAM
+	var pac_slots := 4
+	if mode_now == MODE_GHOST:
+		pac_slots = int(lobby.selected_pac_count)
+	pac_slots = clampi(pac_slots, 1, 4)
+
+	var used_colors: Dictionary = {}
+	var roster_out: Array = []
+	var player_index := 0
+
+	for i in range(pac_slots):
+		var entry: Dictionary = {}
+		if player_index < players.size():
+			var pl: Dictionary = players[player_index]
+			entry = {
+				"id": str(pl.get("id", "p_%d" % i)),
+				"name": str(pl.get("name", "JUGADOR")),
+				"color": str(pl.get("color", "yellow")),
+				"role": "pac",
+				"pac_index": i,
+				"ai": false,
+				"connected": true,
+			}
+			player_index += 1
+		else:
+			entry = {
+				"id": "ai_pac_%d" % i,
+				"name": "CPU %d" % (i + 1),
+				"color": "",
+				"role": "pac",
+				"pac_index": i,
+				"ai": true,
+				"connected": true,
+			}
+		var chosen := str(entry["color"])
+		if chosen == "" or used_colors.has(chosen):
+			chosen = ""
+			for c in Config.PAC_COLOR_ORDER:
+				if not used_colors.has(c):
+					chosen = c
+					break
+		if chosen == "":
+			chosen = Config.PAC_COLOR_ORDER[0]
+		used_colors[chosen] = true
+		entry["color"] = chosen
+		roster_out.append(entry)
+
+	for n in GHOST_NAMES:
+		var entry: Dictionary
+		if player_index < players.size():
+			var pl: Dictionary = players[player_index]
+			entry = {
+				"id": str(pl.get("id", "g_" + n)),
+				"name": str(pl.get("name", "JUGADOR")),
+				"role": "ghost",
+				"ghost_name": n,
+				"ai": false,
+				"connected": true,
+			}
+			player_index += 1
+		else:
+			entry = {
+				"id": "ai_ghost_" + n,
+				"name": n.to_upper(),
+				"role": "ghost",
+				"ghost_name": n,
+				"ai": true,
+				"connected": true,
+			}
+		roster_out.append(entry)
+
+	return {
+		"mode": mode_now,
+		"pac_count": pac_slots,
+		"roster": roster_out,
+		"seed": randi(),
+	}
+
+func start_host_game() -> void:
+	var payload := build_start_payload()
+	if net == null or not net.send_dict({"type": "start", "data": payload}):
+		if lobby:
+			lobby.set_status("NO HAY CONEXIÓN CON EL SERVIDOR", Config.RED)
+		return
+	_begin_online(payload, true)
+
+func _begin_online(data: Dictionary, is_host: bool) -> void:
+	online_role = "host" if is_host else "client"
+	online_mode = str(data.get("mode", MODE_TEAM))
+	roster = data.get("roster", [])
+	local_player_id = net.player_id if net != null else ""
+	level = 1
+	score = 0
+	lives = 3
+	next_extra = 10000
+	popups = []
+	particles = []
+	fruit_history = []
+	dying_player = ""
+	winner = ""
+	maze.reset()
+	_clear_actors()
+	_spawn_actors()
+	_reset_round_state()
+	state = Config.READY
+	ready_timer = Config.ONLINE_READY_TIME
+	world.visible = true
+	if lobby:
+		lobby.hide_lobby()
+	hud.visible = true
+	audio.stop_all()
+	audio.play("intro")
+	snapshot_full = true
+	snapshot_accum = 0.0
+	eaten_delta = []
+	net_events = []
+	client_snapshot_seen = false
+	client_paused = false
+	if is_host:
+		_host_send_snapshot(true)
+	_update_touch_visibility()
+
+func _restart_online() -> void:
+	if online_role != "host":
+		return
+	var data := build_start_payload()
+	net.send_dict({"type": "start", "data": data})
+	_begin_online(data, true)
+
+func _return_to_lobby() -> void:
+	if online_role == "host" and net != null:
+		net.send_dict({"type": "lobby_return"})
+	elif online_role == "client" and net != null:
+		net.send_dict({"type": "leave"})
+	_reset_to_lobby("")
+
+func _reset_to_lobby(message := "") -> void:
+	state = Config.LOBBY
+	paused = false
+	world.visible = false
+	hud.visible = false
+	online_role = "offline"
+	roster = []
+	dying_player = ""
+	winner = ""
+	_clear_actors()
+	maze.reset()
+	popups = []
+	particles = []
+	audio.stop_all()
+	if lobby:
+		lobby.show_lobby()
+		if message != "":
+			lobby.set_status(message, Config.YELLOW)
+	if touch_ui:
+		touch_ui.hide()
+
+func _host_send_snapshot(force := false) -> void:
+	if online_role != "host" or net == null:
+		return
+	var data := build_snapshot()
+	data["ev"] = net_events.duplicate()
+	net_events.clear()
+	if snapshot_full or force:
+		data["ps"] = _pellet_list()
+		snapshot_full = false
+	else:
+		data["e"] = eaten_delta.duplicate()
+	eaten_delta.clear()
+	net.send_dict({"type": "snapshot", "data": data})
+
+func _pellet_list() -> Array:
+	var out: Array = []
+	for tile in maze.pellets.keys():
+		out.append([tile.x, tile.y, int(maze.pellets[tile])])
+	return out
+
+func _dir_name(d) -> String:
+	if d == null:
+		return ""
+	if d == Vector2i(1, 0):
+		return "right"
+	if d == Vector2i(-1, 0):
+		return "left"
+	if d == Vector2i(0, -1):
+		return "up"
+	return "down"
+
+func build_snapshot() -> Dictionary:
+	var data := {
+		"s": state,
+		"t": time,
+		"p": int(paused),
+		"l": level,
+		"sc": score,
+		"ne": next_extra,
+		"m": mode,
+		"mt": mode_timer,
+		"f": int(frightened),
+		"ft": fright_timer,
+		"gc": ghost_combo,
+		"rt": ready_timer,
+		"dt": death_timer,
+		"lt": level_timer,
+		"gt": gameover_timer,
+		"fa": int(fruit_active),
+		"ftm": fruit_timer,
+		"fh": fruit_history.duplicate(),
+		"pe": pellets_eaten,
+		"dp": dying_player,
+		"win": winner,
+		"pa": [],
+		"gh": [],
+	}
+	for p in pacs:
+		if p == null:
+			continue
+		data["pa"].append({
+			"id": p.player_id,
+			"x": p.tile.x,
+			"y": p.tile.y,
+			"d": _dir_name(p.dir),
+			"p": p.progress,
+			"c": p.color_id,
+			"sc": p.score,
+			"lv": p.lives,
+			"mv": int(p.moving),
+			"an": p.anim,
+			"vis": int(p.active),
+		})
+	for g in ghosts:
+		if g == null:
+			continue
+		data["gh"].append({
+			"n": g.ghost_name,
+			"x": g.tile.x,
+			"y": g.tile.y,
+			"d": _dir_name(g.dir),
+			"p": g.progress,
+			"st": g.state,
+			"fr": int(g.frightened),
+			"an": g.anim,
+			"vis": int(g.visible),
+			"pid": g.player_id,
+			"sc": g.score,
+		})
+	return data
+
+func _apply_snapshot(data: Dictionary) -> void:
+	client_snapshot_seen = true
+	if data.has("ps"):
+		maze.pellets.clear()
+		for e in data["ps"]:
+			if e.size() >= 3:
+				maze.pellets[Vector2i(int(e[0]), int(e[1]))] = int(e[2])
+	if data.has("e"):
+		for e in data["e"]:
+			if e.size() >= 2:
+				maze.pellets.erase(Vector2i(int(e[0]), int(e[1])))
+	state = str(data.get("s", Config.READY))
+	client_paused = bool(int(data.get("p", 0)))
+	paused = client_paused
+	time = maxf(time, float(data.get("t", time)))
+	level = int(data.get("l", 1))
+	score = int(data.get("sc", 0))
+	next_extra = int(data.get("ne", 10000))
+	mode = str(data.get("m", "scatter"))
+	mode_timer = float(data.get("mt", 0.0))
+	frightened = bool(int(data.get("f", 0)))
+	fright_timer = float(data.get("ft", 0.0))
+	ghost_combo = int(data.get("gc", 0))
+	ready_timer = float(data.get("rt", 0.0))
+	death_timer = float(data.get("dt", 0.0))
+	level_timer = float(data.get("lt", 0.0))
+	gameover_timer = float(data.get("gt", 0.0))
+	fruit_active = bool(int(data.get("fa", 0)))
+	fruit_timer = float(data.get("ftm", 0.0))
+	fruit_history = data.get("fh", [])
+	pellets_eaten = int(data.get("pe", 0))
+	dying_player = str(data.get("dp", ""))
+	winner = str(data.get("win", ""))
+
+	for e in data.get("pa", []):
+		var p = _find_pac_by_id(str(e.get("id", "")))
+		if p == null:
+			continue
+		p.color_id = str(e.get("c", p.color_id))
+		p.score = int(e.get("sc", p.score))
+		p.lives = int(e.get("lv", p.lives))
+		p.apply_network(
+			Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
+			str(e.get("d", "")),
+			float(e.get("p", 0.0)),
+			bool(int(e.get("mv", 0))),
+			float(e.get("an", 0.0)),
+			bool(int(e.get("vis", 1))))
+	for e in data.get("gh", []):
+		var g = _find_ghost_by_name(str(e.get("n", "")))
+		if g == null:
+			continue
+		g.score = int(e.get("sc", g.score))
+		g.apply_network(
+			Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
+			str(e.get("d", "")),
+			float(e.get("p", 0.0)),
+			str(e.get("st", "normal")),
+			bool(int(e.get("fr", 0))),
+			float(e.get("an", 0.0)),
+			bool(int(e.get("vis", 1))),
+			str(e.get("pid", "")))
+	_handle_events(data.get("ev", []))
+	if paused:
+		audio.stop_loop()
+	elif state == Config.PLAYING:
+		audio.set_loop("fright" if frightened else "siren", 0.42)
+	elif state in [Config.READY, Config.DYING, Config.LEVEL_CLEAR, Config.GAME_OVER]:
+		audio.stop_loop()
+	_update_touch_visibility()
+
+func _find_ghost_by_name(n: String):
+	for g in ghosts:
+		if g.ghost_name == n:
+			return g
+	return null
+
+func _handle_events(events: Array) -> void:
+	for e in events:
+		if typeof(e) != TYPE_DICTIONARY:
+			continue
+		match str(e.get("t", "")):
+			"waka":
+				audio.play_waka(bool(e.get("alt", false)))
+			"power":
+				audio.play("power", 0.7)
+				shake = maxf(shake, 0.12)
+			"ghost":
+				var gx := float(e.get("x", 0.0))
+				var gy := float(e.get("y", 0.0))
+				var pts := int(e.get("pts", 200))
+				audio.play("eatghost", 0.7)
+				popup(gx, gy - 6.0, str(pts), Config.CYAN, 8)
+				_burst(gx, gy, Config.CYAN, 16)
+				shake = maxf(shake, 0.18)
+			"fruit":
+				var fx := float(e.get("x", 0.0))
+				var fy := float(e.get("y", 0.0))
+				var fp := int(e.get("pts", 100))
+				audio.play("fruit", 0.7)
+				popup(fx, fy - 6.0, str(fp), Config.PINK, 8)
+				_burst(fx, fy, Config.PINK, 16)
+			"death":
+				audio.play("death", 0.8)
+				shake = 0.6
+			"extra":
+				audio.play("extra", 0.7)
+			"levelclear":
+				audio.play("extra", 0.7)
+			"gameover":
+				audio.stop_all()
+
+func _update_touch_visibility() -> void:
+	if touch_ui == null:
+		return
+	var show := touch_enabled and state in [Config.READY, Config.PLAYING, Config.DYING, Config.GAME_OVER]
+	touch_ui.visible = show
+	if lobby != null:
+		lobby.set_touch_checked(touch_enabled)
+
+# ---------------------------------------------------------------- highscore
+func _load_high() -> void:
+	high_score = 0
+	if FileAccess.file_exists(HIGHSCORE_PATH):
+		var f := FileAccess.open(HIGHSCORE_PATH, FileAccess.READ)
+		if f:
+			var data = JSON.parse_string(f.get_as_text())
+			if typeof(data) == TYPE_DICTIONARY:
+				high_score = maxi(0, int(data.get("high_score", 0)))
+				return
+	if FileAccess.file_exists("res://assets/highscore.json"):
+		var f2 := FileAccess.open("res://assets/highscore.json", FileAccess.READ)
+		if f2:
+			var data2 = JSON.parse_string(f2.get_as_text())
+			if typeof(data2) == TYPE_DICTIONARY:
+				high_score = maxi(0, int(data2.get("high_score", 0)))
+
+func save_high() -> void:
+	if suppress_save:
+		return
+	var f := FileAccess.open(HIGHSCORE_PATH, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify({"high_score": int(high_score)}))
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		high_score = maxi(high_score, score)
+		save_high()
+		if audio != null:
+			audio.stop_all()
+		if net != null:
+			net.close()
+		get_tree().quit()
+
+func _exit_tree() -> void:
+	if not suppress_save:
+		high_score = maxi(high_score, score)
+		save_high()
+	if audio != null:
+		audio.stop_all()
+	if net != null:
+		net.close()
+
+# -------------------------------------------------------------------- smoke
+func _run_online_smoke() -> void:
+	suppress_save = true
+	smoke_running = true
+	print("ONLINE SMOKE: begin")
+	if net != null:
+		net.player_id = "p_host"
+		net.host_id = "p_host"
+		net.room_code = "TEST"
+	# Roster de equipo: 2 humanos + 2 CPU, 4 fantasmas CPU.
+	var team_roster: Array = [
+		{"id": "p_host", "name": "HOST", "color": "yellow", "role": "pac", "pac_index": 0, "ai": false, "connected": true},
+		{"id": "p_guest", "name": "GUEST", "color": "blue", "role": "pac", "pac_index": 1, "ai": false, "connected": true},
+		{"id": "ai_pac_2", "name": "CPU 3", "color": "green", "role": "pac", "pac_index": 2, "ai": true, "connected": true},
+		{"id": "ai_pac_3", "name": "CPU 4", "color": "pink", "role": "pac", "pac_index": 3, "ai": true, "connected": true},
+		{"id": "ai_ghost_blinky", "name": "BLINKY", "role": "ghost", "ghost_name": "blinky", "ai": true, "connected": true},
+		{"id": "ai_ghost_pinky", "name": "PINKY", "role": "ghost", "ghost_name": "pinky", "ai": true, "connected": true},
+		{"id": "ai_ghost_inky", "name": "INKY", "role": "ghost", "ghost_name": "inky", "ai": true, "connected": true},
+		{"id": "ai_ghost_clyde", "name": "CLYDE", "role": "ghost", "ghost_name": "clyde", "ai": true, "connected": true},
+	]
+	var payload := {"mode": "team", "pac_count": 4, "roster": team_roster, "seed": 7}
+	_begin_online(payload, true)
+	_smoke_check(online_role == "host", "online host role")
+	_smoke_check(pacs.size() == 4, "online team has 4 pacmen")
+	_smoke_check(ghosts.size() == 4, "online team has 4 ghosts")
+	_smoke_check(pac != null and pac.player_id == "p_host", "host local pacman resolved")
+	_smoke_check(pacs[0].color_id == "yellow" and pacs[1].color_id == "blue", "pacman colors assigned")
+	state = Config.PLAYING
+	for i in range(300):
+		time += 1.0 / 60.0
+		_update_play(1.0 / 60.0)
+		_sync_visuals()
+	var snap := build_snapshot()
+	_smoke_check(snap.get("pa", []).size() == 4, "snapshot has 4 pacmen")
+	_smoke_check(snap.get("gh", []).size() == 4, "snapshot has 4 ghosts")
+	_smoke_check(snap.has("s"), "snapshot has state")
+	online_role = "client"
+	_apply_snapshot(snap)
+	_smoke_check(state == Config.PLAYING, "client applies snapshot state")
+	_smoke_check(pacs[0].tile == Vector2i(int(snap["pa"][0]["x"]), int(snap["pa"][0]["y"])), "client applies pac tile")
+
+	# Roster de fantasmas: 2 pacmen, 2 jugadores fantasma, IA rellenando.
+	if lobby != null:
+		lobby.room = {
+			"code": "TEST", "hostId": "p_host",
+			"players": [
+				{"id": "p_host", "name": "HOST", "color": "yellow"},
+				{"id": "p_guest", "name": "GUEST", "color": "blue"},
+				{"id": "p_g1", "name": "G1", "color": "green"},
+				{"id": "p_g2", "name": "G2", "color": "pink"},
+			],
+		}
+		lobby.selected_mode = "ghost"
+		lobby.selected_pac_count = 2
+		var gp := build_start_payload()
+		var pacs_count := 0
+		var ghosts_count := 0
+		var colors := {}
+		var dup := false
+		for e in gp["roster"]:
+			if e["role"] == "pac":
+				pacs_count += 1
+				if colors.has(e["color"]):
+					dup = true
+				colors[e["color"]] = true
+			else:
+				ghosts_count += 1
+		_smoke_check(pacs_count == 2, "ghost mode has 2 pacmen")
+		_smoke_check(ghosts_count == 4, "ghost mode has 4 ghost slots")
+		_smoke_check(not dup, "pacman colors are unique")
+		var ghost_players := 0
+		for e in gp["roster"]:
+			if e["role"] == "ghost" and not e["ai"]:
+				ghost_players += 1
+		_smoke_check(ghost_players == 2, "two human ghost players assigned")
+
+		online_role = "host"
+		roster = gp["roster"]
+		maze.reset()
+		_clear_actors()
+		_spawn_actors()
+		_smoke_check(pacs.size() == 2 and ghosts.size() == 4, "ghost mode actors spawned")
+		var ghost_player = null
+		for g in ghosts:
+			if g.is_player:
+				ghost_player = g
+				break
+		_smoke_check(ghost_player != null, "human ghost node resolved")
+		var before_dir = ghost_player.dir
+		_on_net_input({"playerId": ghost_player.player_id, "data": {"dir": "right"}})
+		_smoke_check(ghost_player.desired_dir == Config.DIRS["right"], "ghost input is applied")
+
+	print("ONLINE SMOKE RESULT: ALL OK" if smoke_ok else "ONLINE SMOKE RESULT: FAILED")
+	get_tree().quit(0 if smoke_ok else 1)
+
+func _smoke_check(cond: bool, label: String) -> void:
+	if cond:
+		print("SMOKE OK: ", label)
+	else:
+		smoke_ok = false
+		push_error("SMOKE FAIL: " + label)
+
+func _run_smoke() -> void:
+	var backup_exists := FileAccess.file_exists(HIGHSCORE_PATH)
+	var backup := ""
+	if backup_exists:
+		backup = FileAccess.get_file_as_string(HIGHSCORE_PATH)
+	var old_high := high_score
+	suppress_save = true
+	smoke_running = true
+	print("SMOKE: begin")
+
+	_smoke_check(sheet != null, "sprite sheet loaded")
+	_smoke_check(bg_texture != null, "background loaded")
+	_smoke_check(scanlines_texture != null, "scanlines loaded")
+	_smoke_check(ghost_frames.size() == 4, "ghost animations built")
+
+	start_local_practice()
+	_smoke_check(state == Config.READY, "new game starts in READY")
+	_smoke_check(lives == 3 and level == 1 and score == 0, "initial stats")
+	_smoke_check(pac != null and ghosts.size() == 4, "actors spawned")
+	_smoke_check(maze.remaining() == 244, "244 pellets")
+	_smoke_check(pac.tile == Config.START_TILE, "pacman at start tile")
+
+	state = Config.PLAYING
+	var pac_frames_seen := {}
+	for i in range(30):
+		_update_play(1.0 / 60.0)
+		_sync_visuals()
+		if pac != null:
+			pac_frames_seen[pac.frame] = true
+	_smoke_check(pac_frames_seen.size() >= 2, "pacman animation advances")
+	var ghost_frames_seen := {}
+	for i in range(30):
+		_update_play(1.0 / 60.0)
+		_sync_visuals()
+		for g in ghosts:
+			if g.visible and g.state in ["normal", "leaving"]:
+				ghost_frames_seen[g.ghost_name + ":" + str(g.frame)] = true
+	_smoke_check(ghost_frames_seen.size() >= 2, "ghost animation advances")
+
+	start_local_practice()
+	state = Config.PLAYING
+	for i in range(480):
+		time += 1.0 / 60.0
+		for g in ghosts:
+			g.update_ghost(1.0 / 60.0)
+	var released := 0
+	for g in ghosts:
+		if g.state != "house":
+			released += 1
+	_smoke_check(released == 4, "all ghosts leave the house")
+
+	start_local_practice()
+	state = Config.PLAYING
+	pac.tile = Vector2i(1, 3)
+	pac.progress = 0.0
+	pac.dir = null
+	pac.arrivals = [pac.tile]
+	_update_play(1.0 / 60.0)
+	_smoke_check(frightened and fright_timer > 7.0, "power pellet triggers fright")
+	var blue := 0
+	for g in ghosts:
+		if g.frightened:
+			blue += 1
+	_smoke_check(blue == 4, "all ghosts are frightened")
+
+	var gh = ghosts[0]
+	gh.state = "normal"
+	gh.frightened = true
+	gh.tile = Vector2i(5, 5)
+	gh.progress = 0.0
+	gh.dir = null
+	gh.eaten_by_player()
+	_smoke_check(gh.state == "eaten", "ghost enters eaten state")
+	for i in range(720):
+		time += 1.0 / 60.0
+		gh.update_ghost(1.0 / 60.0)
+	_smoke_check(gh.state != "eaten" and gh.state != "dead", "ghost returns from the house")
+
+	start_local_practice()
+	state = Config.PLAYING
+	var gh2 = ghosts[1]
+	gh2.state = "normal"
+	gh2.frightened = false
+	gh2.tile = pac.tile
+	gh2.progress = 0.0
+	gh2.dir = null
+	_check_collisions()
+	_smoke_check(state == Config.DYING and pac.lives == 2, "ghost collision starts death")
+
+	start_local_practice()
+	state = Config.PLAYING
+	fruit_active = true
+	fruit_timer = 9.0
+	pac.tile = Config.FRUIT_TILE
+	pac.progress = 0.0
+	pac.dir = null
+	pac.arrivals = []
+	var before := score
+	_update_fruit(1.0 / 60.0)
+	_smoke_check(score - before == 100, "fruit awards 100 points")
+	_smoke_check(not fruit_active, "fruit disappears after pickup")
+	_smoke_check(fruit_history.size() == 1, "fruit history records pickup")
+
+	start_local_practice()
+	state = Config.PLAYING
+	maze.pellets.clear()
+	freeze_timer = 0.0
+	_update_play(1.0 / 60.0)
+	_smoke_check(state == Config.LEVEL_CLEAR, "empty maze starts level clear")
+	for i in range(200):
+		_process(1.0 / 60.0)
+	_smoke_check(level == 2 and state == Config.READY, "next level is ready")
+	_smoke_check(maze.remaining() == 244, "next level refills pellets")
+
+	start_local_practice()
+	lives = 3
+	score = 9990
+	next_extra = 10000
+	add_score(10)
+	_smoke_check(lives == 4 and score == 10000, "extra life at 10000 points")
+
+	var dirs := [Config.DIRS["left"], Config.DIRS["right"], Config.DIRS["up"], Config.DIRS["down"]]
+	for run in range(3):
+		start_local_practice()
+		state = Config.PLAYING
+		for i in range(1200):
+			if i % 15 == 0:
+				pac.desired = dirs[randi() % 4]
+			_update_play(1.0 / 60.0)
+			if state != Config.PLAYING:
+				break
+		_smoke_check(state in [Config.PLAYING, Config.DYING, Config.READY,
+			Config.LEVEL_CLEAR, Config.GAME_OVER], "stress run %d survives" % (run + 1))
+
+	state = Config.LOBBY
+	world.visible = false
+	popups = []
+	particles = []
+	if pac != null and is_instance_valid(pac):
+		pac.free()
+	pac = null
+	for g in ghosts:
+		if is_instance_valid(g):
+			g.free()
+	ghosts.clear()
+	pacs.clear()
+	audio.stop_all()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	high_score = old_high
+	if backup_exists:
+		var f := FileAccess.open(HIGHSCORE_PATH, FileAccess.WRITE)
+		if f:
+			f.store_string(backup)
+	elif FileAccess.file_exists(HIGHSCORE_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(HIGHSCORE_PATH))
+	suppress_save = true
+
+	if smoke_ok:
+		print("SMOKE RESULT: ALL OK")
+	else:
+		print("SMOKE RESULT: FAILED")
+	get_tree().quit(0 if smoke_ok else 1)

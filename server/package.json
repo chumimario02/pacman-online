@@ -1,0 +1,17 @@
+{
+  "name": "pacman-online",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pac-Man Online: cliente Godot web + relay WebSocket para Render",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_rooms.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

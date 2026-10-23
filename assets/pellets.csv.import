@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cir42y3f4yvl1"
+
+[deps]
+
+files=["res://assets/pellets.1.translation", "res://assets/pellets.16.translation"]
+
+source_file="res://assets/pellets.csv"
+dest_files=["res://assets/pellets.1.translation", "res://assets/pellets.16.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

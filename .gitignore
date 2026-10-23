@@ -1,0 +1,16 @@
+# Godot
+.godot/
+*.log
+
+# Node
+server/node_modules/
+server/npm-debug.log*
+
+# Local tools and OS files
+tools/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary exports
+export2.log
