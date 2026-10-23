@@ -69,9 +69,13 @@ var smoke_running := false
 var net: NetClient
 var lobby
 var touch_ui
+var backdrop
+var intro
+var fullscreen_button
 var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
 var roster: Array = []
+var online_ghost_names: Array = []
 var local_player_id := ""
 var dying_player := ""
 var winner := ""
@@ -143,8 +147,8 @@ func _ready() -> void:
 	_position_window.call_deferred()
 	_connect_network()
 	if lobby:
-		lobby.show_lobby()
 		lobby.set_connected(net != null and net.status == "online")
+	_show_intro()
 	if DisplayServer.is_touchscreen_available():
 		touch_enabled = true
 	_update_touch_visibility()
@@ -252,6 +256,12 @@ func _create_online_ui() -> void:
 	layer.layer = 30
 	add_child(layer)
 
+	backdrop = ArcadeBg.new()
+	backdrop.name = "ArcadeBackdrop"
+	backdrop.position = Vector2.ZERO
+	backdrop.size = Vector2(Config.WIDTH, Config.HEIGHT)
+	layer.add_child(backdrop)
+
 	lobby = Lobby.new()
 	lobby.name = "Lobby"
 	lobby.game = self
@@ -268,6 +278,92 @@ func _create_online_ui() -> void:
 	touch_ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(touch_ui)
 	touch_ui.hide()
+
+	intro = Intro.new()
+	intro.name = "Intro"
+	intro.game = self
+	intro.position = Vector2.ZERO
+	intro.size = Vector2(Config.WIDTH, Config.HEIGHT)
+	layer.add_child(intro)
+	intro.hide_intro()
+	intro.started.connect(_enter_menu)
+
+	var fs_layer := CanvasLayer.new()
+	fs_layer.name = "FullscreenLayer"
+	fs_layer.layer = 40
+	add_child(fs_layer)
+	var btn_font := load("res://assets/PressStart2P-Regular.ttf")
+	fullscreen_button = Button.new()
+	fullscreen_button.name = "Fullscreen"
+	fullscreen_button.text = "PANTALLA COMPLETA"
+	fullscreen_button.position = Vector2(842, 14)
+	fullscreen_button.size = Vector2(144, 28)
+	fullscreen_button.focus_mode = Control.FOCUS_NONE
+	fullscreen_button.add_theme_font_override("font", btn_font)
+	fullscreen_button.add_theme_font_size_override("font_size", 6)
+	fullscreen_button.add_theme_color_override("font_color", Config.CYAN)
+	fullscreen_button.add_theme_color_override("font_hover_color", Config.YELLOW)
+	fullscreen_button.add_theme_color_override("font_pressed_color", Config.YELLOW)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.03, 0.06, 0.12, 0.82)
+	normal.border_color = Color(0.12, 0.42, 0.72, 0.85)
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(6)
+	var hover := StyleBoxFlat.new()
+	hover.bg_color = Color(0.06, 0.12, 0.22, 0.95)
+	hover.border_color = Config.CYAN
+	hover.set_border_width_all(1)
+	hover.set_corner_radius_all(6)
+	fullscreen_button.add_theme_stylebox_override("normal", normal)
+	fullscreen_button.add_theme_stylebox_override("hover", hover)
+	fullscreen_button.add_theme_stylebox_override("pressed", hover)
+	fullscreen_button.pressed.connect(toggle_fullscreen)
+	fs_layer.add_child(fullscreen_button)
+
+func _show_intro() -> void:
+	state = Config.LOBBY
+	paused = false
+	world.visible = false
+	hud.visible = false
+	if lobby:
+		lobby.hide_lobby()
+	if backdrop:
+		backdrop.visible = true
+	if intro:
+		intro.show_intro()
+	if fullscreen_button:
+		fullscreen_button.visible = true
+	if touch_ui:
+		touch_ui.hide()
+
+func _enter_menu() -> void:
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = true
+	if lobby:
+		lobby.show_lobby()
+		lobby.set_connected(net != null and net.status == "online")
+	if fullscreen_button:
+		fullscreen_button.visible = true
+
+func toggle_fullscreen() -> void:
+	if OS.has_feature("web"):
+		JavaScriptBridge.eval("""
+			(function () {
+				if (!document.fullscreenElement) {
+					var el = document.documentElement;
+					if (el.requestFullscreen) el.requestFullscreen().catch(function () {});
+				} else if (document.exitFullscreen) {
+					document.exitFullscreen();
+				}
+			})();
+		""")
+		return
+	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 func _position_window() -> void:
 	if OS.has_feature("web"):
@@ -336,7 +432,12 @@ func _spawn_actors() -> void:
 			pac = pacs[0]
 
 	ghosts = []
-	for n in GHOST_NAMES:
+	var spawned_ghosts: Array = online_ghost_names.duplicate()
+	if spawned_ghosts.is_empty():
+		spawned_ghosts = GHOST_NAMES.duplicate()
+	for n in spawned_ghosts:
+		if not GHOST_NAMES.has(n):
+			continue
 		var g := Ghost.new()
 		g.name = n
 		g.setup(self, maze, n, ghost_frames[n])
@@ -349,6 +450,9 @@ func _spawn_actors() -> void:
 		if assigned != null:
 			g.set_player(str(assigned.get("id", "")), str(assigned.get("name", "")))
 			g.connected = bool(assigned.get("connected", true))
+			# Un fantasma humano debe poder salir y jugar de inmediato.
+			g.release = 0.0
+			g.house_timer = 0.0
 			if old_stats.has(g.player_id):
 				g.score = int(old_stats[g.player_id].get("score", 0))
 		world.add_child(g)
@@ -439,11 +543,18 @@ func start_local_practice() -> void:
 	online_role = "offline"
 	online_mode = MODE_TEAM
 	roster = []
+	online_ghost_names = []
 	local_player_id = "local"
 	dying_player = ""
 	winner = ""
 	lobby.hide_lobby()
 	hud.visible = true
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = false
+	if fullscreen_button:
+		fullscreen_button.visible = false
 	start_new_game()
 	_update_touch_visibility()
 
@@ -455,6 +566,12 @@ func go_menu() -> void:
 	menu_time = 0.0
 	world.visible = false
 	hud.visible = false
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = true
+	if fullscreen_button:
+		fullscreen_button.visible = true
 	if lobby:
 		lobby.show_lobby()
 	audio.stop_all()
@@ -464,6 +581,10 @@ func _process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
 	time += dt
 	_update_effects(dt)
+	if backdrop:
+		backdrop.visible = state == Config.LOBBY
+	if fullscreen_button:
+		fullscreen_button.visible = state == Config.LOBBY
 
 	if state == Config.LOBBY:
 		menu_time += dt
@@ -804,7 +925,11 @@ func ghost_target(g) -> Vector2i:
 	if g.ghost_name == "pinky":
 		return pt + d * 4
 	if g.ghost_name == "inky":
-		var b: Vector2i = ghosts[0].tile if ghosts.size() > 0 else Config.HOUSE_EXIT
+		var b: Vector2i = Config.HOUSE_EXIT
+		for other in ghosts:
+			if other != null and other.ghost_name == "blinky":
+				b = other.tile
+				break
 		var p2: Vector2i = pt + d * 2
 		return p2 * 2 - b
 	var dx: int = g.tile.x - pt.x
@@ -969,6 +1094,9 @@ func _start_key(k: int) -> bool:
 	return k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_SPACE
 
 func _handle_key(k: int, pk: int) -> void:
+	if k == KEY_F11 or k == KEY_F:
+		toggle_fullscreen()
+		return
 	if k == KEY_M or pk == KEY_M:
 		_toggle_mute()
 		return
@@ -1022,7 +1150,7 @@ func set_local_dir(dir_name: String) -> void:
 	if p != null and p.active:
 		p.desired = d
 	var g = _local_ghost()
-	if g != null and g.state in ["normal", "leaving"]:
+	if g != null:
 		g.desired_dir = d
 
 func toggle_pause() -> void:
@@ -1132,7 +1260,7 @@ func _on_net_input(msg: Dictionary) -> void:
 	if p != null and p.active:
 		p.desired = Config.DIRS[dname]
 	var g = _find_ghost_by_id(pid)
-	if g != null and g.state in ["normal", "leaving"]:
+	if g != null:
 		g.desired_dir = Config.DIRS[dname]
 
 func _on_room_closed(reason: String) -> void:
@@ -1230,6 +1358,14 @@ func build_start_payload() -> Dictionary:
 			"connected": true,
 		})
 
+	# 0 bots + fantasmas humanos: solo existen esos fantasmas.
+	# Sin fantasmas humanos (o con bots) se completa la banda clásica con IA.
+	var active_ghosts: Array = []
+	var fill_ai_ghosts: bool = human_ghosts.is_empty() or bot_count > 0
+	for gn in Config.GHOST_ORDER:
+		if used_ghosts.has(gn) or fill_ai_ghosts:
+			active_ghosts.append(gn)
+
 	var pac_count := human_pacs.size() + bot_count
 	var mode_now := MODE_TEAM if pac_count >= 4 and human_ghosts.is_empty() else MODE_GHOST
 	return {
@@ -1237,6 +1373,7 @@ func build_start_payload() -> Dictionary:
 		"pac_count": pac_count,
 		"bots": bot_count,
 		"roster": roster_out,
+		"ghosts": active_ghosts,
 		"seed": randi(),
 	}
 
@@ -1256,6 +1393,12 @@ func _begin_online(data: Dictionary, is_host: bool) -> void:
 	online_role = "host" if is_host else "client"
 	online_mode = str(data.get("mode", MODE_TEAM))
 	roster = data.get("roster", [])
+	online_ghost_names = []
+	for gn in data.get("ghosts", []):
+		if Config.GHOST_ORDER.has(gn) and not online_ghost_names.has(gn):
+			online_ghost_names.append(gn)
+	if online_ghost_names.is_empty():
+		online_ghost_names = GHOST_NAMES.duplicate()
 	local_player_id = net.player_id if net != null else ""
 	level = 1
 	score = 0
@@ -1275,6 +1418,12 @@ func _begin_online(data: Dictionary, is_host: bool) -> void:
 	world.visible = true
 	if lobby:
 		lobby.hide_lobby()
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = false
+	if fullscreen_button:
+		fullscreen_button.visible = false
 	hud.visible = true
 	audio.stop_all()
 	audio.play("intro")
@@ -1311,6 +1460,7 @@ func _reset_to_lobby(message := "") -> void:
 	hud.visible = false
 	online_role = "offline"
 	roster = []
+	online_ghost_names = []
 	dying_player = ""
 	winner = ""
 	_clear_actors()
@@ -1318,6 +1468,12 @@ func _reset_to_lobby(message := "") -> void:
 	popups = []
 	particles = []
 	audio.stop_all()
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = true
+	if fullscreen_button:
+		fullscreen_button.visible = true
 	if lobby:
 		lobby.show_lobby()
 		if message != "":
@@ -1650,6 +1806,7 @@ func _run_online_smoke() -> void:
 		_smoke_check(gp["bots"] == 0, "zero bots respected")
 		_smoke_check(gp["mode"] == MODE_GHOST, "custom room uses ghost mode")
 		_smoke_check(not dup, "pacman colors are unique")
+		_smoke_check(gp["ghosts"].size() == 2, "zero bots only spawns human ghosts")
 		var ghost_players := 0
 		for e in gp["roster"]:
 			if e["role"] == "ghost" and not e["ai"]:
@@ -1664,6 +1821,17 @@ func _run_online_smoke() -> void:
 				bot_pacs += 1
 		_smoke_check(bot_pacs == 2, "two CPU pacmen added")
 		_smoke_check(gp_bots["pac_count"] == 4, "bot count fills pac slots")
+		_smoke_check(gp_bots["ghosts"].size() == 4, "bots fill the missing ghosts")
+
+		lobby.room = {
+			"code": "TEST", "hostId": "p_host",
+			"players": [
+				{"id": "p_host", "name": "HOST", "color": "yellow", "role": "pac"},
+			],
+		}
+		lobby.selected_bots = 0
+		var gp_no_ghosts := build_start_payload()
+		_smoke_check(gp_no_ghosts["ghosts"].size() == 4, "no human ghosts keeps 4 AI ghosts")
 
 		lobby.room = {
 			"code": "TEST", "hostId": "p_host",
@@ -1679,19 +1847,51 @@ func _run_online_smoke() -> void:
 
 		online_role = "host"
 		roster = gp["roster"]
+		online_ghost_names = gp["ghosts"].duplicate()
 		maze.reset()
 		_clear_actors()
 		_spawn_actors()
-		_smoke_check(pacs.size() == 2 and ghosts.size() == 4, "ghost mode actors spawned")
+		_smoke_check(pacs.size() == 2 and ghosts.size() == 2, "ghost mode spawns only active ghosts")
 		var ghost_player = null
+		var pinky_ghost = null
 		for g in ghosts:
-			if g.is_player:
+			if g.is_player and ghost_player == null:
 				ghost_player = g
-				break
+			if g.ghost_name == "pinky":
+				pinky_ghost = g
 		_smoke_check(ghost_player != null, "human ghost node resolved")
-		var before_dir = ghost_player.dir
-		_on_net_input({"playerId": ghost_player.player_id, "data": {"dir": "right"}})
-		_smoke_check(ghost_player.desired_dir == Config.DIRS["right"], "ghost input is applied")
+		_smoke_check(pinky_ghost != null and pinky_ghost.release == 0.0, "human ghost releases immediately")
+		if pinky_ghost != null:
+			pinky_ghost.state = "house"
+			pinky_ghost.desired_dir = null
+			_on_net_input({"playerId": pinky_ghost.player_id, "data": {"dir": "right"}})
+			_smoke_check(pinky_ghost.desired_dir == Config.DIRS["right"], "ghost input is queued in the house")
+			pinky_ghost.state = "normal"
+			pinky_ghost.tile = Vector2i(1, 1)
+			pinky_ghost.progress = 0.0
+			pinky_ghost.dir = null
+			pinky_ghost.desired_dir = Config.DIRS["right"]
+			for i in range(120):
+				time += 1.0 / 60.0
+				pinky_ghost.update_ghost(1.0 / 60.0)
+			_smoke_check(pinky_ghost.tile.x > 1, "human ghost moves with player input")
+
+			pinky_ghost.state = "normal"
+			pinky_ghost.frightened = true
+			pinky_ghost.tile = Vector2i(5, 5)
+			pinky_ghost.progress = 0.0
+			pinky_ghost.dir = null
+			pinky_ghost.desired_dir = Config.DIRS["left"]
+			pinky_ghost.eaten_by_player()
+			_smoke_check(pinky_ghost.desired_dir == null, "eaten ghost ignores player input")
+			var reached_home := false
+			for i in range(900):
+				time += 1.0 / 60.0
+				pinky_ghost.update_ghost(1.0 / 60.0)
+				if pinky_ghost.tile == Config.HOUSE_CENTER and pinky_ghost.state in ["eaten", "dead"]:
+					reached_home = true
+			_smoke_check(reached_home, "eaten ghost reaches its house")
+			_smoke_check(pinky_ghost.state != "eaten" and pinky_ghost.state != "dead", "eaten ghost respawns")
 
 	print("ONLINE SMOKE RESULT: ALL OK" if smoke_ok else "ONLINE SMOKE RESULT: FAILED")
 	get_tree().quit(0 if smoke_ok else 1)

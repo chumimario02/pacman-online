@@ -93,6 +93,8 @@ func eaten_by_player() -> void:
 	state = "eaten"
 	frightened = false
 	dead_timer = 0.0
+	# El jugador no puede desviar los ojos: siempre vuelven a la casa.
+	desired_dir = null
 
 func reverse() -> void:
 	if not state in ["normal", "leaving"] or dir == null:
@@ -130,7 +132,7 @@ func _moves() -> Array:
 	return moves
 
 func _player_choice():
-	if not is_player or desired_dir == null:
+	if not is_player or desired_dir == null or state != "normal":
 		return null
 	var allow: bool = _allow_house()
 	var nt = maze.neighbor(tile, desired_dir)

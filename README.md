@@ -5,6 +5,11 @@ Pac-Men de colores, controles táctiles y partidas de Pac-Man contra fantasmas.
 
 El puerto de un solo jugador sigue intacto en `../pacman_godot`.
 
+Al abrir el juego aparece una pantalla **PRESS START** con una cuadrícula animada
+y Pac-Man huyendo de los fantasmas. Toca la pantalla, haz clic o pulsa Enter para
+entrar al menú de salas. También puedes activar pantalla completa con el botón,
+`F` o `F11`.
+
 ## Sala personalizada
 
 Cada jugador elige libremente:
@@ -13,9 +18,11 @@ Cada jugador elige libremente:
 - **Color:** amarillo, azul, verde o rosa para Pac-Man; Blinky, Pinky, Inky o
   Clyde para fantasma.
 - **Bots:** el anfitrión decide cuántos Pac-Men controlados por la CPU completan
-  la partida (0 a 4). Los fantasmas que no elija un jugador siguen siendo CPU.
+  la partida (0 a 4). Con **0 bots** y fantasmas humanos, solo aparecen esos
+  fantasmas (sin IA). Si nadie eligió fantasma, se mantienen los 4 fantasmas CPU.
+  Con bots, la CPU completa los fantasmas que no haya elegido un jugador.
 
-La partida puede ser de 1 a 4 Pac-Men contra los cuatro fantasmas. Si no queda
+La partida puede ser de 1 a 4 Pac-Men contra 1 a 4 fantasmas. Si no queda
 ningún Pac-Man humano, el anfitrión debe añadir al menos un bot para poder
 iniciar. El color y el fantasma elegidos no se pueden repetir.
 
@@ -51,8 +58,10 @@ run_game.bat
 
 | Entrada | Acción |
 | --- | --- |
+| Click / toque / Enter | Entrar desde la pantalla PRESS START |
 | Flechas / WASD | Mover Pac-Man o fantasma |
 | D-pad en pantalla | Mover en móvil/tableta |
+| F / F11 o botón | Activar o salir de pantalla completa |
 | P | Pausa (solo el anfitrión) |
 | M | Silenciar |
 | Esc | Volver al lobby |
@@ -68,7 +77,7 @@ pantalla táctil se activan automáticamente.
   mensajes por `/ws`.
 - **Autoridad:** el anfitrión simula la partida y envía snapshots a 20 Hz. Los
   clientes interpolan posiciones y aplican eventos.
-- **Salas:** código de 4 letras, máximo 4 jugadores humanos. Cada uno elige rol y color; el host elige cuántos bots Pac-Man completan la partida y la CPU cubre los fantasmas que no elija nadie.
+- **Salas:** código de 4 letras, máximo 4 jugadores humanos. Cada uno elige rol y color; el host elige cuántos bots Pac-Man completan la partida. Con 0 bots solo juegan los fantasmas humanos; si no hay ninguno, quedan los 4 fantasmas CPU.
 - Si un jugador se desconecta, su personaje pasa a ser controlado por la CPU.
 - Si el anfitrión sale, la sala se cierra.
 

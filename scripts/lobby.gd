@@ -113,7 +113,7 @@ func _line_edit(pos: Vector2, sz: Vector2, placeholder: String, max_len := 16) -
 
 func _build() -> void:
 	var bg := ColorRect.new()
-	bg.color = Color(0.012, 0.016, 0.033, 1.0)
+	bg.color = Color(0.012, 0.016, 0.033, 0.58)
 	bg.position = Vector2.ZERO
 	bg.size = Vector2(Config.WIDTH, Config.HEIGHT)
 	add_child(bg)
