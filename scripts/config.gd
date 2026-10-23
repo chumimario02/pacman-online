@@ -23,7 +23,7 @@ const GAME_OVER := "gameover"
 
 # Online
 const MAX_PLAYERS := 4
-const NET_TICK := 0.05
+const NET_TICK := 0.033
 const LOBBY_TITLE := "PAC-MAN ONLINE"
 const PAC_COLORS := {
 	"yellow": Color(1.0, 0.9137, 0.0, 1.0),

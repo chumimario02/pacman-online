@@ -1142,10 +1142,20 @@ func _handle_key(k: int, pk: int) -> void:
 func set_local_dir(dir_name: String) -> void:
 	if not Config.DIRS.has(dir_name):
 		return
-	if online_role == "client":
-		net.send_dict({"type": "input", "data": {"dir": dir_name}})
-		return
 	var d = Config.DIRS[dir_name]
+	if online_role == "client":
+		if net != null:
+			net.send_dict({"type": "input", "data": {"dir": dir_name}})
+		# Respuesta inmediata local para reducir el lag percibido.
+		var p = _local_pac()
+		if p != null and p.active:
+			p.desired = d
+			p.update_pac(0.0)
+		var g = _local_ghost()
+		if g != null:
+			g.desired_dir = d
+			g.update_ghost(0.0)
+		return
 	var p = _local_pac()
 	if p != null and p.active:
 		p.desired = d
