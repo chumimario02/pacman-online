@@ -176,10 +176,37 @@ func _load_assets() -> void:
 		fruit_glow_texture = load("res://assets/fruit_glow.png")
 
 func _build_frames() -> void:
-	pac_frames = HDSprites.build_pac_frames()
+	if Config.USE_HD_SPRITES:
+		pac_frames = HDSprites.build_pac_frames()
+		ghost_frames.clear()
+		for n in GHOST_NAMES:
+			ghost_frames[n] = HDSprites.build_ghost_frames(n)
+		return
+	if sheet == null:
+		pac_frames = SpriteFrames.new()
+		return
+	pac_frames = SpriteFrames.new()
+	pac_frames.add_animation("chomp")
+	for col in [0, 1, 2, 1]:
+		pac_frames.add_frame("chomp", _atlas(col, 0))
+	pac_frames.set_animation_loop("chomp", true)
+	pac_frames.set_animation_speed("chomp", 16.0)
+
 	ghost_frames.clear()
 	for n in GHOST_NAMES:
-		ghost_frames[n] = HDSprites.build_ghost_frames(n)
+		var row: int = Config.GHOST_ROWS[n]
+		var sf := SpriteFrames.new()
+		_add_anim(sf, "right", [0, 1], row, 7.0, true)
+		_add_anim(sf, "left", [2, 3], row, 7.0, true)
+		_add_anim(sf, "up", [4, 5], row, 7.0, true)
+		_add_anim(sf, "down", [6, 7], row, 7.0, true)
+		_add_anim(sf, "fright", [0, 1], 7, 7.0, true)
+		_add_anim(sf, "flash", [2, 3], 7, 7.0, true)
+		_add_anim(sf, "eyes_left", [0], 6, 1.0, false)
+		_add_anim(sf, "eyes_down", [2], 6, 1.0, false)
+		_add_anim(sf, "eyes_right", [4], 6, 1.0, false)
+		_add_anim(sf, "eyes_up", [6], 6, 1.0, false)
+		ghost_frames[n] = sf
 
 func _add_anim(sf: SpriteFrames, anim: String, cols: Array, row: int, speed: float, loop: bool) -> void:
 	sf.add_animation(anim)
