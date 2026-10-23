@@ -10,7 +10,7 @@ var selected_role := "pac"
 var selected_color := "yellow"
 var selected_ghost := "blinky"
 var selected_bots := 2
-var selected_ghost_bots := 2
+var selected_ghost_bots := -1
 var connected := false
 var local_practice := false
 
@@ -344,6 +344,13 @@ func _is_host() -> bool:
 func _player_color_name(cid: String) -> String:
 	return Config.PAC_COLOR_NAMES.get(cid, cid.to_upper())
 
+func _human_ghost_count() -> int:
+	var count := 0
+	for p in room.get("players", []):
+		if str(p.get("role", "pac")) == "ghost":
+			count += 1
+	return count
+
 func _human_pac_count() -> int:
 	var count := 0
 	for p in room.get("players", []):
@@ -435,10 +442,17 @@ func refresh_ui() -> void:
 	if host and selected_bots > _free_pac_slots():
 		bots_label.text = "BOTS PAC: %d (MAX %d)" % [selected_bots, _free_pac_slots()]
 
-	bots_ghost_label.visible = local_practice and room_ui.visible
-	bots_ghost_label.text = "BOTS FANTASMAS: %d" % selected_ghost_bots
-	bot_ghost_minus.visible = local_practice and host and room_ui.visible
-	bot_ghost_plus.visible = local_practice and host and room_ui.visible
+	bots_ghost_label.visible = room_ui.visible
+	var effective_ghost_bots := selected_ghost_bots
+	if selected_ghost_bots < 0:
+		var available := maxi(0, 4 - _human_ghost_count())
+		if local_practice or _human_ghost_count() == 0 or selected_bots > 0:
+			effective_ghost_bots = available
+		else:
+			effective_ghost_bots = 0
+	bots_ghost_label.text = "BOTS FANTASMAS: %d" % effective_ghost_bots
+	bot_ghost_minus.visible = host and room_ui.visible
+	bot_ghost_plus.visible = host and room_ui.visible
 	role_pac_button.text = ("> " if selected_role == "pac" else "") + "PAC-MAN"
 	role_ghost_button.text = ("> " if selected_role == "ghost" else "") + "FANTASMA"
 
@@ -561,11 +575,21 @@ func _on_bots(delta: int) -> void:
 func _on_ghost_bots(delta: int) -> void:
 	if not _is_host():
 		return
+	if selected_ghost_bots < 0:
+		var available := maxi(0, 4 - _human_ghost_count())
+		var effective := available
+		if not local_practice and _human_ghost_count() > 0 and selected_bots <= 0:
+			effective = 0
+		selected_ghost_bots = effective
 	selected_ghost_bots = clampi(selected_ghost_bots + delta, 0, 4)
 	if local_practice:
 		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots}
 		refresh_ui()
 		return
+	if game and game.net:
+		# El anfitrión decide; no hace falta enviar a clientes hasta iniciar.
+		pass
+	refresh_ui()
 
 func _on_touch_toggled(pressed: bool) -> void:
 	if game:
