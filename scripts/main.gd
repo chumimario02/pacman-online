@@ -72,6 +72,7 @@ var touch_ui
 var backdrop
 var intro
 var fullscreen_button
+var last_input_seq: Dictionary = {}
 var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
 var roster: Array = []
@@ -87,6 +88,9 @@ var eaten_delta: Array = []
 var net_events: Array = []
 var client_snapshot_seen := false
 var client_paused := false
+var local_input_seq := 0
+var pending_inputs: Array = []
+var last_snapshot_time := 0.0
 
 func _ready() -> void:
 	randomize()
@@ -676,10 +680,18 @@ func _process(delta: float) -> void:
 
 func _client_process(dt: float) -> void:
 	for p in pacs:
-		if p != null and is_instance_valid(p):
+		if p == null or not is_instance_valid(p):
+			continue
+		if p == _local_pac():
+			p.update_pac(dt)
+		else:
 			p.interpolate_network(dt)
 	for g in ghosts:
-		if g != null and is_instance_valid(g):
+		if g == null or not is_instance_valid(g):
+			continue
+		if g == _local_ghost():
+			g.update_ghost(dt)
+		else:
 			g.interpolate_network(dt)
 	_sync_visuals_client()
 
@@ -1040,6 +1052,50 @@ func _local_ghost():
 		return null
 	return _find_ghost_by_id(local_player_id)
 
+func _reconcile_local_pac(last_seq: int) -> void:
+	var p = _local_pac()
+	if p == null or not p.active:
+		return
+	var remaining: Array = []
+	for inp in pending_inputs:
+		if int(inp.get("seq", 0)) > last_seq and str(inp.get("kind", "")) == "pac":
+			remaining.append(inp)
+	pending_inputs = remaining
+	for inp in remaining:
+		var dt := float(inp.get("time", last_snapshot_time)) - last_snapshot_time
+		if dt > 0.0:
+			p.update_pac(dt)
+		var dir_name := str(inp.get("dir", ""))
+		if Config.DIRS.has(dir_name):
+			p.desired = Config.DIRS[dir_name]
+			p.update_pac(0.0)
+		last_snapshot_time = float(inp.get("time", last_snapshot_time))
+	var dt2 := time - last_snapshot_time
+	if dt2 > 0.0:
+		p.update_pac(dt2)
+
+func _reconcile_local_ghost(last_seq: int) -> void:
+	var g = _local_ghost()
+	if g == null:
+		return
+	var remaining: Array = []
+	for inp in pending_inputs:
+		if int(inp.get("seq", 0)) > last_seq and str(inp.get("kind", "")) == "ghost":
+			remaining.append(inp)
+	pending_inputs = remaining
+	for inp in remaining:
+		var dt := float(inp.get("time", last_snapshot_time)) - last_snapshot_time
+		if dt > 0.0:
+			g.update_ghost(dt)
+		var dir_name := str(inp.get("dir", ""))
+		if Config.DIRS.has(dir_name):
+			g.desired_dir = Config.DIRS[dir_name]
+			g.update_ghost(0.0)
+		last_snapshot_time = float(inp.get("time", last_snapshot_time))
+	var dt2 := time - last_snapshot_time
+	if dt2 > 0.0:
+		g.update_ghost(dt2)
+
 # -------------------------------------------------------------------- effect
 func popup(x: float, y: float, text: String, color: Color, size := 8) -> void:
 	popups.append({"x": x, "y": y, "text": text, "color": color, "size": size, "life": 1.0})
@@ -1138,10 +1194,13 @@ func _sync_visuals_client() -> void:
 		else:
 			p.scale = Vector2.ONE
 			p.modulate = Color.WHITE
+			p.sync_visual()
 	for g in ghosts:
 		if g == null or not is_instance_valid(g):
 			continue
 		g.visible = g.net_visible and not (state in [Config.DYING, Config.GAME_OVER])
+		if g.visible:
+			g.sync_visual()
 	_sync_fruit()
 
 func _sync_fruit() -> void:
@@ -1226,16 +1285,19 @@ func set_local_dir(dir_name: String) -> void:
 	var d = Config.DIRS[dir_name]
 	if online_role == "client":
 		if net != null:
-			net.send_dict({"type": "input", "data": {"dir": dir_name}})
+			local_input_seq += 1
+			net.send_dict({"type": "input", "data": {"dir": dir_name, "seq": local_input_seq}})
 		# Respuesta inmediata local para reducir el lag percibido.
 		var p = _local_pac()
 		if p != null and p.active:
 			p.desired = d
 			p.update_pac(0.0)
+			pending_inputs.append({"seq": local_input_seq, "dir": dir_name, "time": time, "kind": "pac"})
 		var g = _local_ghost()
 		if g != null:
 			g.desired_dir = d
 			g.update_ghost(0.0)
+			pending_inputs.append({"seq": local_input_seq, "dir": dir_name, "time": time, "kind": "ghost"})
 		return
 	var p = _local_pac()
 	if p != null and p.active:
@@ -1347,6 +1409,9 @@ func _on_net_input(msg: Dictionary) -> void:
 	var dname := str(data.get("dir", ""))
 	if not Config.DIRS.has(dname):
 		return
+	var seq := int(data.get("seq", 0))
+	if seq > 0:
+		last_input_seq[pid] = seq
 	var p = _find_pac_by_id(pid)
 	if p != null and p.active:
 		p.desired = Config.DIRS[dname]
@@ -1669,6 +1734,7 @@ func build_snapshot() -> Dictionary:
 			"mv": int(p.moving),
 			"an": p.anim,
 			"vis": int(p.active),
+			"seq": int(last_input_seq.get(p.player_id, 0)),
 		})
 	for g in ghosts:
 		if g == null:
@@ -1685,6 +1751,7 @@ func build_snapshot() -> Dictionary:
 			"vis": int(g.visible),
 			"pid": g.player_id,
 			"sc": g.score,
+			"seq": int(last_input_seq.get(g.player_id, 0)),
 		})
 	return data
 
@@ -1699,6 +1766,7 @@ func _apply_snapshot(data: Dictionary) -> void:
 		for e in data["e"]:
 			if e.size() >= 2:
 				maze.pellets.erase(Vector2i(int(e[0]), int(e[1])))
+	last_snapshot_time = float(data.get("t", last_snapshot_time))
 	state = str(data.get("s", Config.READY))
 	client_paused = bool(int(data.get("p", 0)))
 	paused = client_paused
@@ -1722,10 +1790,13 @@ func _apply_snapshot(data: Dictionary) -> void:
 	dying_player = str(data.get("dp", ""))
 	winner = str(data.get("win", ""))
 
+	var local_pac_seq := 0
 	for e in data.get("pa", []):
 		var p = _find_pac_by_id(str(e.get("id", "")))
 		if p == null:
 			continue
+		if p == _local_pac():
+			local_pac_seq = int(e.get("seq", 0))
 		p.color_id = str(e.get("c", p.color_id))
 		p.score = int(e.get("sc", p.score))
 		p.lives = int(e.get("lv", p.lives))
@@ -1736,10 +1807,13 @@ func _apply_snapshot(data: Dictionary) -> void:
 			bool(int(e.get("mv", 0))),
 			float(e.get("an", 0.0)),
 			bool(int(e.get("vis", 1))))
+	var local_ghost_seq := 0
 	for e in data.get("gh", []):
 		var g = _find_ghost_by_name(str(e.get("n", "")))
 		if g == null:
 			continue
+		if g == _local_ghost():
+			local_ghost_seq = int(e.get("seq", 0))
 		g.score = int(e.get("sc", g.score))
 		g.apply_network(
 			Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
@@ -1758,6 +1832,11 @@ func _apply_snapshot(data: Dictionary) -> void:
 	elif state in [Config.READY, Config.DYING, Config.LEVEL_CLEAR, Config.GAME_OVER]:
 		audio.stop_loop()
 	_update_touch_visibility()
+
+	if _local_pac() != null:
+		_reconcile_local_pac(local_pac_seq)
+	if _local_ghost() != null:
+		_reconcile_local_ghost(local_ghost_seq)
 
 func _find_ghost_by_name(n: String):
 	for g in ghosts:
