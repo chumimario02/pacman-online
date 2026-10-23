@@ -11,6 +11,7 @@ var selected_color := "yellow"
 var selected_ghost := "blinky"
 var selected_bots := 2
 var connected := false
+var local_practice := false
 
 var join_panel: Panel
 var room_panel: Panel
@@ -216,7 +217,7 @@ func _build() -> void:
 	room_ui.add_child(touch_check)
 
 	start_button = _button("INICIAR PARTIDA", Vector2(535, 530), Vector2(230, 34), Config.GREEN)
-	start_button.pressed.connect(func(): game.start_host_game())
+	start_button.pressed.connect(_on_start_pressed)
 	leave_button = _button("SALIR", Vector2(780, 530), Vector2(120, 34), Config.SALMON)
 	leave_button.pressed.connect(_on_leave)
 
@@ -326,6 +327,8 @@ func set_touch_checked(value: bool) -> void:
 		game.touch_enabled = value
 
 func _is_host() -> bool:
+	if local_practice:
+		return true
 	return player_id != "" and player_id == host_id
 
 func _player_color_name(cid: String) -> String:
@@ -364,6 +367,15 @@ func _first_free_palette(role: String) -> String:
 	return ""
 
 func _send_profile() -> void:
+	if local_practice:
+		for p in room.get("players", []):
+			if str(p.get("id", "")) == player_id:
+				p["role"] = selected_role
+				p["color"] = selected_color
+				p["ghost_name"] = selected_ghost
+		room["settings"] = {"bots": selected_bots}
+		refresh_ui()
+		return
 	if game and game.net:
 		game.net.send_dict({
 			"type": "profile",
@@ -371,6 +383,30 @@ func _send_profile() -> void:
 			"color": selected_color,
 			"ghost_name": selected_ghost,
 		})
+
+func show_local_practice() -> void:
+	local_practice = true
+	connected = true
+	player_id = "local"
+	host_id = "local"
+	selected_role = "pac"
+	selected_color = "yellow"
+	selected_ghost = "blinky"
+	selected_bots = 2
+	room = {
+		"code": "LOCAL", "hostId": "local",
+		"players": [
+			{"id": "local", "name": "JUGADOR", "role": "pac", "color": "yellow", "ghost_name": "blinky"},
+		],
+		"settings": {"bots": selected_bots},
+	}
+	show_lobby()
+
+func _on_start_pressed() -> void:
+	if local_practice:
+		game.start_local_custom()
+	else:
+		game.start_host_game()
 
 func refresh_ui() -> void:
 	if not is_inside_tree():
@@ -499,6 +535,10 @@ func _on_bots(delta: int) -> void:
 	if not _is_host():
 		return
 	selected_bots = clampi(selected_bots + delta, 0, 4)
+	if local_practice:
+		room["settings"] = {"bots": selected_bots}
+		refresh_ui()
+		return
 	if game and game.net:
 		game.net.send_dict({"type": "lobby", "data": {"bots": selected_bots}})
 	refresh_ui()

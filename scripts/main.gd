@@ -76,6 +76,7 @@ var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
 var roster: Array = []
 var online_ghost_names: Array = []
+var local_custom_mode := false
 var local_player_id := ""
 var dying_player := ""
 var winner := ""
@@ -539,12 +540,98 @@ func start_new_game() -> void:
 	_clear_actors()
 	_setup_level(true)
 
-func start_local_practice() -> void:
+func start_local_single() -> void:
 	online_role = "offline"
 	online_mode = MODE_TEAM
 	roster = []
 	online_ghost_names = []
 	local_player_id = "local"
+	local_custom_mode = false
+	dying_player = ""
+	winner = ""
+	lobby.hide_lobby()
+	hud.visible = true
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = false
+	if fullscreen_button:
+		fullscreen_button.visible = false
+	start_new_game()
+	_update_touch_visibility()
+
+func start_local_practice() -> void:
+	online_role = "offline"
+	local_player_id = "local"
+	local_custom_mode = false
+	dying_player = ""
+	winner = ""
+	if lobby:
+		lobby.local_practice = true
+		lobby.show_local_practice()
+	world.visible = false
+	hud.visible = false
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = true
+	if fullscreen_button:
+		fullscreen_button.visible = true
+	_update_touch_visibility()
+
+func start_local_custom() -> void:
+	local_custom_mode = true
+	var payload := build_start_payload()
+	if payload.is_empty():
+		if lobby:
+			lobby.set_status("FALTA UN PAC-MAN. AGREGA UN BOT O CAMBIA DE ROL.", Config.RED)
+		return
+	_begin_local(payload)
+
+func _begin_local(data: Dictionary) -> void:
+	online_role = "offline"
+	online_mode = str(data.get("mode", MODE_TEAM))
+	roster = data.get("roster", [])
+	online_ghost_names = []
+	for gn in data.get("ghosts", []):
+		if Config.GHOST_ORDER.has(gn) and not online_ghost_names.has(gn):
+			online_ghost_names.append(gn)
+	if online_ghost_names.is_empty():
+		online_ghost_names = GHOST_NAMES.duplicate()
+	local_player_id = "local"
+	level = 1
+	score = 0
+	lives = 3
+	next_extra = 10000
+	popups = []
+	particles = []
+	fruit_history = []
+	dying_player = ""
+	winner = ""
+	maze.reset()
+	_clear_actors()
+	_spawn_actors()
+	_reset_round_state()
+	state = Config.READY
+	ready_timer = Config.READY_TIME
+	world.visible = true
+	if lobby:
+		lobby.hide_lobby()
+	if intro:
+		intro.hide_intro()
+	if backdrop:
+		backdrop.visible = false
+	if fullscreen_button:
+		fullscreen_button.visible = false
+	hud.visible = true
+	audio.stop_all()
+	audio.play("intro")
+	_update_touch_visibility()
+	online_mode = MODE_TEAM
+	roster = []
+	online_ghost_names = []
+	local_player_id = "local"
+	local_custom_mode = false
 	dying_player = ""
 	winner = ""
 	lobby.hide_lobby()
@@ -1108,8 +1195,10 @@ func _handle_key(k: int, pk: int) -> void:
 		if online_role in ["offline", "host"] and (_start_key(k) or _start_key(pk)):
 			if online_role == "host":
 				_restart_online()
+			if local_custom_mode:
+				start_local_custom()
 			else:
-				start_local_practice()
+				start_local_single()
 		elif k == KEY_ESCAPE:
 			_return_to_lobby()
 		return
@@ -1403,6 +1492,7 @@ func _begin_online(data: Dictionary, is_host: bool) -> void:
 	online_role = "host" if is_host else "client"
 	online_mode = str(data.get("mode", MODE_TEAM))
 	roster = data.get("roster", [])
+	local_custom_mode = false
 	online_ghost_names = []
 	for gn in data.get("ghosts", []):
 		if Config.GHOST_ORDER.has(gn) and not online_ghost_names.has(gn):
@@ -1471,6 +1561,7 @@ func _reset_to_lobby(message := "") -> void:
 	online_role = "offline"
 	roster = []
 	online_ghost_names = []
+	local_custom_mode = false
 	dying_player = ""
 	winner = ""
 	_clear_actors()
@@ -1485,6 +1576,7 @@ func _reset_to_lobby(message := "") -> void:
 	if fullscreen_button:
 		fullscreen_button.visible = true
 	if lobby:
+		lobby.local_practice = false
 		lobby.show_lobby()
 		if message != "":
 			lobby.set_status(message, Config.YELLOW)
@@ -1938,7 +2030,7 @@ func _run_smoke() -> void:
 	_smoke_check(scanlines_texture != null, "scanlines loaded")
 	_smoke_check(ghost_frames.size() == 4, "ghost animations built")
 
-	start_local_practice()
+	start_local_single()
 	_smoke_check(state == Config.READY, "new game starts in READY")
 	_smoke_check(lives == 3 and level == 1 and score == 0, "initial stats")
 	_smoke_check(pac != null and ghosts.size() == 4, "actors spawned")
@@ -1962,7 +2054,7 @@ func _run_smoke() -> void:
 				ghost_frames_seen[g.ghost_name + ":" + str(g.frame)] = true
 	_smoke_check(ghost_frames_seen.size() >= 2, "ghost animation advances")
 
-	start_local_practice()
+	start_local_single()
 	state = Config.PLAYING
 	for i in range(480):
 		time += 1.0 / 60.0
@@ -1974,7 +2066,7 @@ func _run_smoke() -> void:
 			released += 1
 	_smoke_check(released == 4, "all ghosts leave the house")
 
-	start_local_practice()
+	start_local_single()
 	state = Config.PLAYING
 	pac.tile = Vector2i(1, 3)
 	pac.progress = 0.0
@@ -2001,7 +2093,7 @@ func _run_smoke() -> void:
 		gh.update_ghost(1.0 / 60.0)
 	_smoke_check(gh.state != "eaten" and gh.state != "dead", "ghost returns from the house")
 
-	start_local_practice()
+	start_local_single()
 	state = Config.PLAYING
 	var gh2 = ghosts[1]
 	gh2.state = "normal"
@@ -2012,7 +2104,7 @@ func _run_smoke() -> void:
 	_check_collisions()
 	_smoke_check(state == Config.DYING and pac.lives == 2, "ghost collision starts death")
 
-	start_local_practice()
+	start_local_single()
 	state = Config.PLAYING
 	fruit_active = true
 	fruit_timer = 9.0
@@ -2026,7 +2118,7 @@ func _run_smoke() -> void:
 	_smoke_check(not fruit_active, "fruit disappears after pickup")
 	_smoke_check(fruit_history.size() == 1, "fruit history records pickup")
 
-	start_local_practice()
+	start_local_single()
 	state = Config.PLAYING
 	maze.pellets.clear()
 	freeze_timer = 0.0
@@ -2037,7 +2129,7 @@ func _run_smoke() -> void:
 	_smoke_check(level == 2 and state == Config.READY, "next level is ready")
 	_smoke_check(maze.remaining() == 244, "next level refills pellets")
 
-	start_local_practice()
+	start_local_single()
 	lives = 3
 	score = 9990
 	next_extra = 10000
@@ -2046,7 +2138,7 @@ func _run_smoke() -> void:
 
 	var dirs := [Config.DIRS["left"], Config.DIRS["right"], Config.DIRS["up"], Config.DIRS["down"]]
 	for run in range(3):
-		start_local_practice()
+		start_local_single()
 		state = Config.PLAYING
 		for i in range(1200):
 			if i % 15 == 0:
