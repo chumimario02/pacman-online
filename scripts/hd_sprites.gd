@@ -140,14 +140,14 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		sf.set_animation_speed(anim, 10.0)
 	sf.add_animation("fright")
 	if sheet != null:
-		for y in [504, 554, 604, 654]:
+		for y in [554, 604, 654, 704]:
 			sf.add_frame("fright", _sheet_cell(sheet, 3, y, 50, 50))
 	sf.set_animation_loop("fright", true)
 	sf.set_animation_speed("fright", 10.0)
 	sf.add_animation("flash")
 	if sheet != null:
-		for y in [504, 554, 604, 654]:
-			sf.add_frame("flash", _tint_cell(sheet, 3, y, 50, 50, Color(1, 1, 1, 1)))
+		for y in [554, 604, 654, 704]:
+			sf.add_frame("flash", _sheet_cell(sheet, 53, y, 50, 50))
 	sf.set_animation_loop("flash", true)
 	sf.set_animation_speed("flash", 10.0)
 	for dir_name in ["left", "down", "right", "up"]:
