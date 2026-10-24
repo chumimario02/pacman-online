@@ -1983,7 +1983,7 @@ func _handle_events(events: Array) -> void:
 func _update_touch_visibility() -> void:
 	if touch_ui == null:
 		return
-	var show := touch_enabled and not zoomed and state in [Config.READY, Config.PLAYING, Config.DYING, Config.GAME_OVER]
+	var show := touch_enabled and state in [Config.READY, Config.PLAYING, Config.DYING, Config.GAME_OVER]
 	touch_ui.visible = show
 	if lobby != null:
 		lobby.set_touch_checked(touch_enabled)
