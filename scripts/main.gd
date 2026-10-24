@@ -56,6 +56,7 @@ var ghost_frames: Dictionary = {}
 var fruit_level_textures: Array = []
 
 var world: Node2D
+var name_tags
 var maze_view
 var effects
 var hud
@@ -118,6 +119,12 @@ func _ready() -> void:
 	world.name = "World"
 	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
 	add_child(world)
+
+	name_tags = NameTags.new()
+	name_tags.name = "NameTags"
+	name_tags.game = self
+	name_tags.z_index = 20
+	world.add_child(name_tags)
 
 	maze = Maze.new()
 	maze_view = MazeView.new()
