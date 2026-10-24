@@ -33,31 +33,25 @@ static func _tex(img: Image) -> ImageTexture:
 	out.resize(32, 32, Image.INTERPOLATE_BILINEAR)
 	return ImageTexture.create_from_image(out)
 
+static func _asset(path: String) -> ImageTexture:
+	var tex: Texture2D = load(path)
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img == null:
+		return null
+	img = img.duplicate()
+	img.resize(32, 32, Image.INTERPOLATE_BILINEAR)
+	return ImageTexture.create_from_image(img)
+
 static func build_pac_frames() -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	sf.add_animation("chomp")
-	var mouths := [0.75, 0.45, 0.12, 0.45]
-	for frame in range(mouths.size()):
-		var img := _img()
-		var mouth: float = mouths[frame]
-		var da := 0.0  # right-facing; sprite rotates via game code
-		for y in range(64):
-			for x in range(64):
-				var dx := float(x) - 32.0
-				var dy := float(y) - 32.0
-				var rr := dx * dx + dy * dy
-				if rr > 28.0 * 28.0:
-					continue
-				var ang := atan2(dy, dx) - da
-				while ang > PI:
-					ang -= TAU
-				while ang < -PI:
-					ang += TAU
-				if abs(ang) > mouth:
-					img.set_pixel(x, y, Color(1.0, 0.9, 0.0, 1.0))
-		sf.add_frame("chomp", _tex(img))
+	var tex := _asset("res://assets/hd/pac.png")
+	if tex != null:
+		sf.add_frame("chomp", tex)
 	sf.set_animation_loop("chomp", true)
-	sf.set_animation_speed("chomp", 18.0)
+	sf.set_animation_speed("chomp", 12.0)
 	return sf
 
 static func _ghost_body(img: Image, color: Color, frame: int) -> void:
@@ -119,60 +113,70 @@ static func _ghost_zigzag(img: Image, color: Color, y0: int) -> void:
 				img.set_pixel(x, y, color)
 				if y + 1 < 64:
 					img.set_pixel(x, y + 1, color)
+static func _tint_asset(path: String, tint: Color, flash := false) -> ImageTexture:
+	var tex: Texture2D = load(path)
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img == null:
+		return null
+	img = img.duplicate()
+	img.resize(32, 32, Image.INTERPOLATE_BILINEAR)
+	for y in range(img.get_height()):
+		for x in range(img.get_width()):
+			var c := img.get_pixel(x, y)
+			if c.a < 0.05:
+				continue
+			if c.r > 0.85 and c.g > 0.85 and c.b > 0.85:
+				continue  # keep white eyes
+			if flash:
+				img.set_pixel(x, y, Color(1, 1, 1, c.a))
+			else:
+				img.set_pixel(x, y, Color(tint.r, tint.g, tint.b, c.a))
+	return ImageTexture.create_from_image(img)
+
 static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 	var sf := SpriteFrames.new()
-	var base_color := Color(1, 0.2, 0.2, 1)
+	var idx := 1
 	match ghost_name:
-		"pinky": base_color = Color(1.0, 0.6, 0.85, 1)
-		"inky": base_color = Color(0.0, 0.9, 0.9, 1)
-		"clyde": base_color = Color(1.0, 0.6, 0.2, 1)
+		"pinky": idx = 2
+		"inky": idx = 3
+		"clyde": idx = 4
+	var a := _asset("res://assets/hd/ghost%d.png" % idx)
+	var b := _asset("res://assets/hd/ghost%db.png" % idx)
 	for anim in ["right", "left", "up", "down"]:
 		sf.add_animation(anim)
-		for frame in range(2):
-			var img := _img()
-			_ghost_body(img, base_color, frame)
-			_ghost_eyes(img, anim, false, false)
-			sf.add_frame(anim, _tex(img))
+		if a != null:
+			sf.add_frame(anim, a)
+		if b != null:
+			sf.add_frame(anim, b)
 		sf.set_animation_loop(anim, true)
 		sf.set_animation_speed(anim, 8.0)
-	# frightened
+	# frightened: blue body, keep white eyes
 	sf.add_animation("fright")
-	for frame in range(2):
-		var img := _img()
-		_ghost_body(img, Color(0.1, 0.2, 0.9, 1), frame)
-		# scared eyes
-		_circle(img, 20.0, 24.0, 9.0, Color(1, 1, 1, 1))
-		_circle(img, 44.0, 24.0, 9.0, Color(1, 1, 1, 1))
-		# small pupils
-		_circle(img, 20.0, 24.0, 4.0, Color(0.8, 0.0, 0.0, 1))
-		_circle(img, 44.0, 24.0, 4.0, Color(0.8, 0.0, 0.0, 1))
-		# zigzag mouth
-		_ghost_zigzag(img, Color(1, 1, 1, 1), 38)
-		sf.add_frame("fright", _tex(img))
+	var fb := _tint_asset("res://assets/hd/ghost%d.png" % idx, Color(0.15, 0.25, 1.0, 1.0))
+	var fbb := _tint_asset("res://assets/hd/ghost%db.png" % idx, Color(0.15, 0.25, 1.0, 1.0))
+	if fb != null:
+		sf.add_frame("fright", fb)
+	if fbb != null:
+		sf.add_frame("fright", fbb)
 	sf.set_animation_loop("fright", true)
 	sf.set_animation_speed("fright", 8.0)
-	# flash
+	# flash: alternate white/blue
 	sf.add_animation("flash")
-	for frame in range(2):
-		var img := _img()
-		var col := Color(1, 1, 1, 1) if frame == 0 else Color(0.1, 0.2, 0.9, 1)
-		var eye_col := Color(0.1, 0.2, 0.9, 1) if frame == 0 else Color(1, 1, 1, 1)
-		var mouth_col := Color(0.1, 0.2, 0.9, 1) if frame == 0 else Color(1, 1, 1, 1)
-		_ghost_body(img, col, frame)
-		_circle(img, 20.0, 24.0, 9.0, eye_col)
-		_circle(img, 44.0, 24.0, 9.0, eye_col)
-		_circle(img, 20.0, 24.0, 4.0, mouth_col)
-		_circle(img, 44.0, 24.0, 4.0, mouth_col)
-		_ghost_zigzag(img, mouth_col, 38)
-		sf.add_frame("flash", _tex(img))
+	var wb := _tint_asset("res://assets/hd/ghost%d.png" % idx, Color(1, 1, 1, 1), true)
+	var wbb := _tint_asset("res://assets/hd/ghost%db.png" % idx, Color(1, 1, 1, 1), true)
+	if wb != null:
+		sf.add_frame("flash", wb)
+	if fb != null:
+		sf.add_frame("flash", fb)
 	sf.set_animation_loop("flash", true)
 	sf.set_animation_speed("flash", 8.0)
-	# eyes
+	# eyes-only frames for eaten state
 	for dir_name in ["left", "down", "right", "up"]:
 		var anim_name: String = "eyes_" + dir_name
 		sf.add_animation(anim_name)
 		var img := _img()
-		# transparent body, just eyes
 		var px := 0.0
 		var py := 0.0
 		match dir_name:
@@ -181,12 +185,10 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 			"up": py = -4.0
 			"down": py = 4.0
 		_circle(img, 20.0, 24.0, 6.0, Color(1, 1, 1, 1))
-		_circle(img, 22.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
+		_circle(img, 20.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
 		_circle(img, 44.0, 24.0, 6.0, Color(1, 1, 1, 1))
-		_circle(img, 42.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
+		_circle(img, 44.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
 		sf.add_frame(anim_name, _tex(img))
 		sf.set_animation_loop(anim_name, false)
 		sf.set_animation_speed(anim_name, 1.0)
 	return sf
-
-
