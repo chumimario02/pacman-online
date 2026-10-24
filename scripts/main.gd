@@ -436,6 +436,7 @@ func _set_zoom(enabled: bool) -> void:
 		world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
 		if hud and state != Config.LOBBY:
 			hud.visible = true
+	_update_touch_visibility()
 	if OS.has_feature("web"):
 		return
 	if DisplayServer.get_name() == "headless":
@@ -774,6 +775,9 @@ func _process(delta: float) -> void:
 			_host_send_snapshot()
 
 func _client_process(dt: float) -> void:
+	if paused:
+		_sync_visuals_client()
+		return
 	for p in pacs:
 		if p == null or not is_instance_valid(p):
 			continue
@@ -1334,7 +1338,7 @@ func _handle_key(k: int, pk: int) -> void:
 		if online_role in ["offline", "host"] and (_start_key(k) or _start_key(pk)):
 			if online_role == "host":
 				_restart_online()
-			if local_custom_mode:
+			elif local_custom_mode:
 				start_local_custom()
 			else:
 				start_local_single()
@@ -1404,6 +1408,8 @@ func toggle_pause() -> void:
 		audio.stop_loop()
 	elif state == Config.PLAYING:
 		audio.set_loop("fright" if frightened else "siren", 0.42)
+	if online_role == "host":
+		_host_send_snapshot(true)
 
 func _toggle_mute() -> void:
 	audio.toggle_mute()
@@ -1998,7 +2004,7 @@ func _handle_events(events: Array) -> void:
 func _update_touch_visibility() -> void:
 	if touch_ui == null:
 		return
-	var show := touch_enabled and state in [Config.READY, Config.PLAYING, Config.DYING, Config.GAME_OVER]
+	var show := touch_enabled and not zoomed and state in [Config.READY, Config.PLAYING, Config.DYING, Config.GAME_OVER]
 	touch_ui.visible = show
 	if lobby != null:
 		lobby.set_touch_checked(touch_enabled)
