@@ -66,14 +66,14 @@ static func _ghost_body(img: Image, color: Color, frame: int) -> void:
 			var dx := float(x) - 32.0
 			var dy := float(y) - 26.0
 			var inside := false
-			# Dome
-			if y <= 34 and (dx * dx + dy * dy <= 24.0 * 24.0):
+			# Dome (slightly smaller to match body)
+			if y <= 34 and (dx * dx + dy * dy <= 22.0 * 22.0):
 				inside = true
 			# Body
-			elif y > 24 and y <= 44 and abs(dx) <= 20.0:
+			elif y > 24 and y <= 44 and abs(dx) <= 22.0:
 				inside = true
 			# Triangular skirt
-			elif y > 44 and y <= 56 and abs(dx) <= 20.0:
+			elif y > 44 and y <= 56 and abs(dx) <= 22.0:
 				var tri := fmod(float(x) + frame * 5.0, 12.0)
 				if tri > 6.0:
 					tri = 12.0 - tri
@@ -106,6 +106,19 @@ static func _ghost_eyes(img: Image, dir_name: String, frightened: bool, flash: b
 	_circle(img, 42.0, 24.0, 7.0, eye_color)
 	_circle(img, 42.0 + px, 24.0 + py, 3.0, pupil_color)
 
+static func _ghost_zigzag(img: Image, color: Color, y0: int) -> void:
+	for i in range(8):
+		var x0 := 14 + i * 5
+		var x1 := x0 + 3
+		var y1 := y0 - 4 if i % 2 == 0 else y0 + 4
+		# draw small line segments
+		for t in range(0, 4):
+			var x := x0 + t
+			var y := y0 + int((float(t) / 3.0) * (y1 - y0))
+			if x >= 0 and x < 64 and y >= 0 and y < 64:
+				img.set_pixel(x, y, color)
+				if y + 1 < 64:
+					img.set_pixel(x, y + 1, color)
 static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	var base_color := Color(1, 0.2, 0.2, 1)
@@ -127,7 +140,14 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 	for frame in range(2):
 		var img := _img()
 		_ghost_body(img, Color(0.1, 0.2, 0.9, 1), frame)
-		_ghost_eyes(img, "down", true, false)
+		# scared eyes
+		_circle(img, 22.0, 24.0, 4.0, Color(1, 1, 1, 1))
+		_circle(img, 42.0, 24.0, 4.0, Color(1, 1, 1, 1))
+		# small pupils
+		_circle(img, 22.0, 24.0, 1.5, Color(0.8, 0.0, 0.0, 1))
+		_circle(img, 42.0, 24.0, 1.5, Color(0.8, 0.0, 0.0, 1))
+		# zigzag mouth
+		_ghost_zigzag(img, Color(1, 1, 1, 1), 38)
 		sf.add_frame("fright", _tex(img))
 	sf.set_animation_loop("fright", true)
 	sf.set_animation_speed("fright", 8.0)
@@ -136,8 +156,14 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 	for frame in range(2):
 		var img := _img()
 		var col := Color(1, 1, 1, 1) if frame == 0 else Color(0.1, 0.2, 0.9, 1)
+		var eye_col := Color(0.1, 0.2, 0.9, 1) if frame == 0 else Color(1, 1, 1, 1)
+		var mouth_col := Color(0.1, 0.2, 0.9, 1) if frame == 0 else Color(1, 1, 1, 1)
 		_ghost_body(img, col, frame)
-		_ghost_eyes(img, "down", true, true)
+		_circle(img, 22.0, 24.0, 4.0, eye_col)
+		_circle(img, 42.0, 24.0, 4.0, eye_col)
+		_circle(img, 22.0, 24.0, 1.5, mouth_col)
+		_circle(img, 42.0, 24.0, 1.5, mouth_col)
+		_ghost_zigzag(img, mouth_col, 38)
 		sf.add_frame("flash", _tex(img))
 	sf.set_animation_loop("flash", true)
 	sf.set_animation_speed("flash", 8.0)
