@@ -77,7 +77,7 @@ static func _ghost_body(img: Image, color: Color, frame: int) -> void:
 				var tri := fmod(float(x) + frame * 6.0, 14.0)
 				if tri > 7.0:
 					tri = 14.0 - tri
-				var maxy := 40.0 + tri * 1.6
+				var maxy := 40.0 + tri * 2.4
 				if float(y) <= maxy:
 					inside = true
 			if inside:
