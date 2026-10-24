@@ -484,7 +484,7 @@ func _apply_hd_look(node) -> void:
 func _apply_maze_mode() -> void:
 	if maze_view == null:
 		return
-	maze_view.modulate = Color(0.55, 0.75, 1.0) if maze_mode == "remake" else Color.WHITE
+	maze_view.modulate = Color.WHITE
 
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}

@@ -4,12 +4,14 @@ class_name MazeView
 var game
 var maze
 var maze_texture: Texture2D
+var maze_remake_texture: Texture2D
 var power_texture: Texture2D
 var power_glow_texture: Texture2D
 var hide_frame := false
 
 func _ready() -> void:
 	maze_texture = load("res://assets/maze_bg.png")
+	maze_remake_texture = load("res://assets/maze_remake.png")
 	power_texture = load("res://assets/power.png")
 	power_glow_texture = load("res://assets/power_glow.png")
 
@@ -20,7 +22,10 @@ func _draw() -> void:
 	if game == null or maze == null:
 		return
 	if maze_texture:
-		draw_texture(maze_texture, Vector2.ZERO)
+		if game != null and game.maze_mode == "remake" and maze_remake_texture:
+			draw_texture_rect(maze_remake_texture, Rect2(0, 0, Config.MAZE_W, Config.MAZE_H), false)
+		else:
+			draw_texture(maze_texture, Vector2.ZERO)
 
 	for tile in maze.pellets.keys():
 		var p: Vector2 = maze.center(tile)
@@ -35,7 +40,7 @@ func _draw() -> void:
 		else:
 			draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Config.SALMON)
 
-	if not hide_frame:
+	if not hide_frame and (game == null or game.maze_mode != "remake"):
 		var frame := Rect2(-9, -9, Config.MAZE_W + 18, Config.MAZE_H + 18)
 		draw_rect(frame, Color(0.0706, 0.1098, 0.1882, 1.0), false, 1.0)
 		_brackets(Rect2(frame.position + Vector2(2, 2), frame.size - Vector2(4, 4)),
