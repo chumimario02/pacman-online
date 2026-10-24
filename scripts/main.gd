@@ -82,6 +82,8 @@ var zoom_base_pos := Vector2.ZERO
 var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
 var maze_mode := "classic"
+var maze_origin := Vector2(Config.MAZE_X, Config.MAZE_Y)
+var maze_size := Vector2(Config.MAZE_W, Config.MAZE_H)
 var roster: Array = []
 var online_ghost_names: Array = []
 var local_custom_mode := false
@@ -123,7 +125,7 @@ func _ready() -> void:
 
 	world = Node2D.new()
 	world.name = "World"
-	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
+	world.position = maze_origin
 	add_child(world)
 
 	name_tags = NameTags.new()
@@ -177,6 +179,8 @@ func _ready() -> void:
 		_run_smoke.call_deferred()
 	if "--online-smoke" in OS.get_cmdline_user_args():
 		_run_online_smoke.call_deferred()
+	if "--remake-smoke" in OS.get_cmdline_user_args():
+		_run_remake_smoke.call_deferred()
 
 # -------------------------------------------------------------------- setup
 func _load_assets() -> void:
@@ -421,8 +425,8 @@ func toggle_fullscreen() -> void:
 func _set_zoom(enabled: bool) -> void:
 	zoomed = enabled
 	if enabled:
-		var frame_w := float(Config.MAZE_W + 18)
-		var frame_h := float(Config.MAZE_H + 18)
+		var frame_w := float(maze_size.x + 18)
+		var frame_h := float(maze_size.y + 18)
 		var s := minf((float(Config.WIDTH) - 20.0) / frame_w, (float(Config.HEIGHT) - 20.0) / frame_h)
 		world.scale = Vector2(s, s)
 		var target := Vector2((float(Config.WIDTH) - frame_w * s) * 0.5, (float(Config.HEIGHT) - frame_h * s) * 0.5)
@@ -435,7 +439,7 @@ func _set_zoom(enabled: bool) -> void:
 	else:
 		world.scale = Vector2.ONE
 		zoom_base_pos = Vector2.ZERO
-		world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
+		world.position = maze_origin
 		if maze_view:
 			maze_view.hide_frame = false
 		if hud and state != Config.LOBBY:
@@ -482,9 +486,24 @@ func _apply_hd_look(node) -> void:
 	node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 func _apply_maze_mode() -> void:
-	if maze_view == null:
+	if maze == null:
 		return
-	maze_view.modulate = Color.WHITE
+	maze.set_mode(maze_mode)
+	if maze_mode == "remake":
+		maze_origin = Vector2(Config.REMAKE_X, Config.REMAKE_Y)
+		maze_size = Vector2(Config.REMAKE_W, Config.REMAKE_H)
+	else:
+		maze_origin = Vector2(Config.MAZE_X, Config.MAZE_Y)
+		maze_size = Vector2(Config.MAZE_W, Config.MAZE_H)
+	if world != null and not zoomed:
+		world.position = maze_origin
+	if maze_view != null:
+		maze_view.modulate = Color.WHITE
+		maze_view.hide_frame = maze_mode == "remake"
+		maze_view.queue_redraw()
+
+func maze_rect() -> Rect2:
+	return Rect2(maze_origin, maze_size)
 
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
@@ -497,7 +516,7 @@ func _spawn_actors() -> void:
 	if roster.is_empty():
 		pac = PacMan.new()
 		pac.name = "PacMan"
-		pac.setup(maze, pac_frames, "local", "yellow", Config.START_TILE)
+		pac.setup(maze, pac_frames, "local", "yellow", maze.start_tile())
 		_apply_hd_look(pac)
 		pac.player_name = "TÚ"
 		if old_stats.has("local"):
@@ -517,7 +536,7 @@ func _spawn_actors() -> void:
 		pac_entries.sort_custom(func(a, b): return int(a.get("pac_index", 0)) < int(b.get("pac_index", 0)))
 		for e in pac_entries:
 			var idx: int = int(e.get("pac_index", 0))
-			var spawn: Vector2i = Config.PAC_STARTS[idx % Config.PAC_STARTS.size()]
+			var spawn: Vector2i = maze.pac_start(idx)
 			var p := PacMan.new()
 			p.name = "Pac_" + str(e.get("id", idx))
 			p.setup(maze, pac_frames, str(e.get("id", "")), str(e.get("color", "yellow")), spawn)
@@ -1001,7 +1020,7 @@ func _update_fruit(dt: float) -> void:
 	if fruit_timer <= 0.0:
 		fruit_active = false
 		return
-	var fx: Vector2 = maze.center(Config.FRUIT_TILE)
+	var fx: Vector2 = maze.center(maze.fruit_tile())
 	for p in pacs:
 		if p == null or not p.active:
 			continue
@@ -1141,11 +1160,11 @@ func _target_pac(g):
 
 func ghost_target(g) -> Vector2i:
 	if mode == "scatter":
-		var st: Vector2i = Config.SCATTER_TARGETS[g.ghost_name]
+		var st: Vector2i = maze.scatter_target(g.ghost_name)
 		return st
 	var target = _target_pac(g)
 	if target == null:
-		return Config.SCATTER_TARGETS[g.ghost_name]
+		return maze.scatter_target(g.ghost_name)
 	var pt: Vector2i = target.tile
 	var d: Vector2i = target.dir if target.dir != null else Vector2i(-1, 0)
 	if g.ghost_name == "blinky":
@@ -1157,7 +1176,7 @@ func ghost_target(g) -> Vector2i:
 			return pt + Vector2i(-4, -4)
 		return pt + d * 4
 	if g.ghost_name == "inky":
-		var b: Vector2i = Config.HOUSE_EXIT
+		var b: Vector2i = maze.house_exit()
 		for other in ghosts:
 			if other != null and other.ghost_name == "blinky":
 				b = other.tile
@@ -1170,7 +1189,7 @@ func ghost_target(g) -> Vector2i:
 	var dy: int = g.tile.y - pt.y
 	if dx * dx + dy * dy >= 64:
 		return pt
-	var ct: Vector2i = Config.SCATTER_TARGETS["clyde"]
+	var ct: Vector2i = maze.scatter_target("clyde")
 	return ct
 
 func _find_pac_by_id(pid: String):
@@ -1270,7 +1289,7 @@ func _animate_death(p) -> void:
 		p.modulate.a = 1.0 - prog * 0.55
 
 func _sync_visuals() -> void:
-	world.position = (zoom_base_pos if zoomed else Vector2(Config.MAZE_X, Config.MAZE_Y)) + _shake_offset()
+	world.position = (zoom_base_pos if zoomed else maze_origin) + _shake_offset()
 
 	for p in pacs:
 		if p == null or not is_instance_valid(p):
@@ -1295,7 +1314,7 @@ func _sync_visuals() -> void:
 	_sync_fruit()
 
 func _sync_visuals_client() -> void:
-	world.position = (zoom_base_pos if zoomed else Vector2(Config.MAZE_X, Config.MAZE_Y)) + _shake_offset()
+	world.position = (zoom_base_pos if zoomed else maze_origin) + _shake_offset()
 	for p in pacs:
 		if p == null or not is_instance_valid(p):
 			continue
@@ -1321,7 +1340,7 @@ func _sync_fruit() -> void:
 		var idx: int = mini(level - 1, 7)
 		if idx < fruit_level_textures.size():
 			fruit_sprite.texture = fruit_level_textures[idx]
-		var fp: Vector2 = maze.center(Config.FRUIT_TILE)
+		var fp: Vector2 = maze.center(maze.fruit_tile())
 		fp.y += sin(time * 4.0) * 2.0
 		fruit_sprite.position = fp - Vector2(16, 16)
 		fruit_glow.position = fp - Vector2(26, 26)
@@ -1341,7 +1360,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if state in [Config.READY, Config.PLAYING] and not lobby.visible:
 			var s := world.scale.x
-			var rect := Rect2(world.position, Vector2(Config.MAZE_W, Config.MAZE_H) * s)
+			var rect := Rect2(world.position, maze_size * s)
 			if rect.has_point(event.position) or zoomed:
 				_set_zoom(not zoomed)
 				return
@@ -2251,12 +2270,53 @@ func _run_online_smoke() -> void:
 			for i in range(900):
 				time += 1.0 / 60.0
 				pinky_ghost.update_ghost(1.0 / 60.0)
-				if pinky_ghost.tile == Config.HOUSE_CENTER and pinky_ghost.state in ["eaten", "dead"]:
+				if pinky_ghost.tile == maze.house_center() and pinky_ghost.state in ["eaten", "dead"]:
 					reached_home = true
 			_smoke_check(reached_home, "eaten ghost reaches its house")
 			_smoke_check(pinky_ghost.state != "eaten" and pinky_ghost.state != "dead", "eaten ghost respawns")
 
 	print("ONLINE SMOKE RESULT: ALL OK" if smoke_ok else "ONLINE SMOKE RESULT: FAILED")
+	get_tree().quit(0 if smoke_ok else 1)
+
+func _run_remake_smoke() -> void:
+	smoke_running = true
+	suppress_save = true
+	print("REMAKE SMOKE: begin")
+	maze_mode = "remake"
+	_build_frames()
+	_apply_maze_mode()
+	roster = []
+	online_ghost_names = []
+	local_player_id = "local"
+	online_role = "offline"
+	start_new_game()
+	_smoke_check(maze.mode == "remake", "remake maze active")
+	_smoke_check(maze.cols == Config.REMAKE_COLS and maze.rows == Config.REMAKE_ROWS, "remake grid 55x34")
+	_smoke_check(maze.remaining() > 0, "remake has pellets")
+	_smoke_check(maze.is_walkable(maze.start_tile()), "remake pacman start is walkable")
+	_smoke_check(pac != null and pac.tile == maze.start_tile(), "remake pacman at start")
+	_smoke_check(ghosts.size() == 4, "remake four ghosts")
+	for g in ghosts:
+		_smoke_check(maze.is_walkable(g.tile), "remake ghost starts walkable: " + g.ghost_name)
+	var bad_pellets := 0
+	for tile in maze.pellets.keys():
+		if not maze.is_walkable(tile):
+			bad_pellets += 1
+	_smoke_check(bad_pellets == 0, "all remake pellets are on walkable tiles")
+	state = Config.PLAYING
+	for i in range(600):
+		time += 1.0 / 60.0
+		_update_play(1.0 / 60.0)
+		_sync_visuals()
+	for g in ghosts:
+		_smoke_check(maze.is_walkable(g.tile), "remake ghost stays in maze: " + g.ghost_name)
+	var released := 0
+	for g in ghosts:
+		if g.state != "house":
+			released += 1
+	_smoke_check(released == 4, "remake ghosts leave the house")
+	_smoke_check(pac == null or maze.is_walkable(pac.tile), "remake pacman stays in maze")
+	print("REMAKE SMOKE RESULT: ALL OK" if smoke_ok else "REMAKE SMOKE RESULT: FAILED")
 	get_tree().quit(0 if smoke_ok else 1)
 
 func _smoke_check(cond: bool, label: String) -> void:
@@ -2286,7 +2346,7 @@ func _run_smoke() -> void:
 	_smoke_check(lives == 4 and level == 1 and score == 0, "initial stats")
 	_smoke_check(pac != null and ghosts.size() == 4, "actors spawned")
 	_smoke_check(maze.remaining() == 244, "244 pellets")
-	_smoke_check(pac.tile == Config.START_TILE, "pacman at start tile")
+	_smoke_check(pac.tile == maze.start_tile(), "pacman at start tile")
 
 	state = Config.PLAYING
 	var pac_frames_seen := {}
@@ -2359,7 +2419,7 @@ func _run_smoke() -> void:
 	state = Config.PLAYING
 	fruit_active = true
 	fruit_timer = 9.0
-	pac.tile = Config.FRUIT_TILE
+	pac.tile = maze.fruit_tile()
 	pac.progress = 0.0
 	pac.dir = null
 	pac.arrivals = []

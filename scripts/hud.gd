@@ -36,10 +36,13 @@ func _draw() -> void:
 	elif game.state == Config.LOBBY:
 		return
 	else:
-		_draw_header()
-		_draw_panels()
+		if game.maze_mode == "remake":
+			_draw_remake_hud()
+		else:
+			_draw_header()
+			_draw_panels()
+			_draw_footer()
 		_draw_maze_overlay()
-		_draw_footer()
 		if game.state == Config.GAME_OVER:
 			_draw_game_over()
 		elif game.paused:
@@ -154,6 +157,17 @@ func _draw_header() -> void:
 	_text("%06d" % game.high_score, 18, Config.WHITE, Vector2(Config.WIDTH - 24, 34), 2)
 	_hline(Color(0.1176, 0.1725, 0.2902, 1), 24, Config.WIDTH - 24, 78)
 
+func _draw_remake_hud() -> void:
+	_text("REMAKE", 10, Config.CYAN, Vector2(24, 16))
+	_text("SCORE %06d" % game.score, 11, Config.WHITE, Vector2(24, 38))
+	var lp = _local_pac()
+	if lp != null:
+		_text("LIVES x%d" % int(lp.lives), 9, Config.YELLOW, Vector2(24, 58))
+	_text("HIGH %06d" % game.high_score, 9, Config.PINK, Vector2(Config.WIDTH - 24, 16), 2)
+	_text("LEVEL %02d" % game.level, 9, Config.YELLOW, Vector2(Config.WIDTH - 24, 38), 2)
+	_text("P PAUSE   M MUTE   ESC LOBBY", 6, Config.GREY, Vector2(Config.WIDTH * 0.5, 634), 1)
+	_hline(Color(0.1176, 0.1725, 0.2902, 1), 24, Config.WIDTH - 24, 66)
+
 func _draw_panels() -> void:
 	var left := Rect2(24, 112, 228, 484)
 	var right := Rect2(Config.WIDTH - 252, 112, 228, 484)
@@ -263,22 +277,22 @@ func _draw_panels() -> void:
 		_text("POWER %ds" % maxi(0, int(game.fright_timer + 0.999)), 6, Config.CYAN, Vector2(768, 578))
 
 func _draw_maze_overlay() -> void:
+	var mr: Rect2 = game.maze_rect()
 	if game.state == Config.LEVEL_CLEAR:
 		var phase := int((Config.LEVEL_CLEAR_TIME - game.level_timer) / 0.18)
 		if phase % 2 == 0:
-			draw_rect(Rect2(Config.MAZE_X, Config.MAZE_Y, Config.MAZE_W, Config.MAZE_H),
-				Color(60.0 / 255.0, 78.0 / 255.0, 120.0 / 255.0, 0.55))
+			draw_rect(mr, Color(60.0 / 255.0, 78.0 / 255.0, 120.0 / 255.0, 0.55))
 	if game.state == Config.READY:
 		var pulse := 0.65 + 0.35 * sin(game.time * 6.0)
 		var col := _with_alpha(Config.YELLOW, clampf(pulse, 0.0, 1.0))
-		_textc("READY!", 16, col, Vector2(Config.MAZE_X + Config.MAZE_W * 0.5,
-			Config.MAZE_Y + 17 * Config.TILE), Color(0.5882, 0.4706, 0.0, 1.0))
+		_textc("READY!", 16, col, Vector2(mr.position.x + mr.size.x * 0.5,
+			mr.position.y + mr.size.y * 0.5), Color(0.5882, 0.4706, 0.0, 1.0))
 	elif game.state == Config.LEVEL_CLEAR:
 		_textc("LEVEL CLEAR", 22, Config.WHITE,
-			Vector2(Config.MAZE_X + Config.MAZE_W * 0.5, Config.MAZE_Y + Config.MAZE_H * 0.5 - 12),
+			Vector2(mr.position.x + mr.size.x * 0.5, mr.position.y + mr.size.y * 0.5 - 12),
 			Color(0.4706, 0.6667, 1.0, 1.0))
 		_textc("LEVEL %d READY" % (game.level + 1), 8, Config.YELLOW,
-			Vector2(Config.MAZE_X + Config.MAZE_W * 0.5, Config.MAZE_Y + Config.MAZE_H * 0.5 + 22))
+			Vector2(mr.position.x + mr.size.x * 0.5, mr.position.y + mr.size.y * 0.5 + 22))
 
 func _draw_footer() -> void:
 	if _is_online():
@@ -302,15 +316,16 @@ func _draw_footer() -> void:
 		_text(muted, 6, Color(0.2353, 0.2824, 0.3765, 1), Vector2(Config.WIDTH - 24, 620), 2)
 
 func _draw_pause() -> void:
-	draw_rect(Rect2(Config.MAZE_X, Config.MAZE_Y, Config.MAZE_W, Config.MAZE_H), Color(0, 0, 0, 185.0 / 255.0))
+	var mr: Rect2 = game.maze_rect()
+	draw_rect(mr, Color(0, 0, 0, 185.0 / 255.0))
 	_textc("PAUSED", 24, Config.CYAN,
-		Vector2(Config.MAZE_X + Config.MAZE_W * 0.5, Config.MAZE_Y + Config.MAZE_H * 0.5 - 18),
+		Vector2(mr.position.x + mr.size.x * 0.5, mr.position.y + mr.size.y * 0.5 - 18),
 		Color(0.0, 0.4706, 0.6275, 1.0))
 	var sub := "PRESS P TO CONTINUE"
 	if game.online_role == "client":
 		sub = "PAUSED BY HOST"
 	_textc(sub, 8, Config.GREY,
-		Vector2(Config.MAZE_X + Config.MAZE_W * 0.5, Config.MAZE_Y + Config.MAZE_H * 0.5 + 22))
+		Vector2(mr.position.x + mr.size.x * 0.5, mr.position.y + mr.size.y * 0.5 + 22))
 
 func _draw_game_over() -> void:
 	draw_rect(Rect2(0, 0, Config.WIDTH, Config.HEIGHT), Color(0, 0, 0, 180.0 / 255.0))

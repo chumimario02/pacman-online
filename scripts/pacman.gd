@@ -178,7 +178,7 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 	visible = is_visible
 	net_target_pos = pos()
 	net_lerp = 0.0
-	if net_prev_pos.distance_to(net_target_pos) > Config.MAZE_W * 0.5:
+	if net_prev_pos.distance_to(net_target_pos) > maze.pixel_size().x * 0.5:
 		net_prev_pos = net_target_pos
 	rotation = angle_for_dir(dir if dir != null else facing)
 	frame = int(net_anim / 0.06) % 4 if net_moving else 1

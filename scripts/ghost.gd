@@ -39,13 +39,13 @@ func setup(game_ref, maze_ref, name: String, frames: SpriteFrames) -> void:
 	maze = maze_ref
 	ghost_name = name
 	sprite_frames = frames
-	spawn = Config.GHOST_START[name]
+	spawn = maze.ghost_start(name)
 	tile = spawn
 	dir = null
 	progress = 0.0
 	state = "normal" if name == "blinky" else "house"
 	frightened = false
-	release = Config.GHOST_RELEASE[name]
+	release = maze.ghost_release(name)
 	house_timer = 0.0
 	dead_timer = 0.0
 	anim = 0.0
@@ -61,13 +61,13 @@ func set_player(p_id: String, p_name := "") -> void:
 	player_name = p_name
 
 func reset_to_house() -> void:
-	spawn = Config.GHOST_START[ghost_name]
+	spawn = maze.ghost_start(ghost_name)
 	tile = spawn
 	dir = null
 	progress = 0.0
 	state = "normal" if ghost_name == "blinky" else "house"
 	frightened = false
-	release = 0.0 if is_player else Config.GHOST_RELEASE[ghost_name]
+	release = 0.0 if is_player else maze.ghost_release(ghost_name)
 	house_timer = 0.0
 	dead_timer = 0.0
 	eaten_flash = 0.0
@@ -94,7 +94,7 @@ func get_speed() -> float:
 		return Config.LEAVE_SPEED
 	var base := Config.FRIGHT_SPEED if frightened else minf(
 		Config.GHOST_MAX_SPEED, Config.GHOST_BASE_SPEED + (game.level - 1) * 4.5)
-	if tile.y == 14 and (tile.x <= 5 or tile.x >= 22):
+	if maze.is_tunnel_row(tile.y) and (tile.x <= 5 or tile.x >= maze.cols - 6):
 		base *= 0.6
 	return base
 
@@ -238,7 +238,7 @@ func update_ghost(dt: float) -> void:
 	if state == "dead":
 		dead_timer -= dt
 		if dead_timer <= 0.0:
-			tile = Config.HOUSE_CENTER
+			tile = maze.house_center()
 			progress = 0.0
 			dir = null
 			state = "leaving"
@@ -275,12 +275,12 @@ func _arrive() -> void:
 		return
 	tile = nxt
 	progress = 0.0
-	if state == "eaten" and tile == Config.HOUSE_CENTER:
+	if state == "eaten" and tile == maze.house_center():
 		state = "dead"
 		dead_timer = 1.0
 		dir = null
 		return
-	if state == "leaving" and tile == Config.HOUSE_EXIT:
+	if state == "leaving" and tile == maze.house_exit():
 		state = "normal"
 		frightened = game.frightened
 	_choose()
@@ -357,7 +357,7 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 	visible = is_visible
 	net_target_pos = pos()
 	net_lerp = 0.0
-	if net_prev_pos.distance_to(net_target_pos) > Config.MAZE_W * 0.5:
+	if net_prev_pos.distance_to(net_target_pos) > maze.pixel_size().x * 0.5:
 		net_prev_pos = net_target_pos
 	if state in ["eaten", "dead"]:
 		if game != null and game.use_hd_sprites:

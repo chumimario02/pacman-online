@@ -23,7 +23,10 @@ func _draw() -> void:
 		return
 	if maze_texture:
 		if game != null and game.maze_mode == "remake" and maze_remake_texture:
-			draw_texture_rect(maze_remake_texture, Rect2(0, 0, Config.MAZE_W, Config.MAZE_H), false)
+			# El mapa nuevo se dibuja 1:1 desde su recuadro real (880x544).
+			draw_texture_rect_region(maze_remake_texture,
+				Rect2(0, 0, Config.REMAKE_W, Config.REMAKE_H),
+				Rect2(80, 88, Config.REMAKE_W, Config.REMAKE_H))
 		else:
 			draw_texture(maze_texture, Vector2.ZERO)
 
