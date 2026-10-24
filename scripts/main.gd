@@ -77,6 +77,7 @@ var hd_button
 var use_hd_sprites := false
 var nostalgia_mode := false
 var last_input_seq: Dictionary = {}
+var zoomed := false
 var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
 var roster: Array = []
@@ -422,6 +423,36 @@ func toggle_fullscreen() -> void:
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
+func _set_zoom(enabled: bool) -> void:
+	zoomed = enabled
+	if enabled:
+		var s := 680.0 / float(Config.MAZE_H)
+		world.scale = Vector2(s, s)
+		world.position = Vector2((float(Config.WIDTH) - Config.MAZE_W * s) * 0.5, 0.0)
+		if hud:
+			hud.visible = false
+	else:
+		world.scale = Vector2.ONE
+		world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
+		if hud and state != Config.LOBBY:
+			hud.visible = true
+	if OS.has_feature("web"):
+		return
+	if DisplayServer.get_name() == "headless":
+		return
+	var screen := DisplayServer.window_get_current_screen()
+	var usable := DisplayServer.screen_get_usable_rect(screen)
+	var client_pos := DisplayServer.window_get_position()
+	var outer_pos := DisplayServer.window_get_position_with_decorations()
+	var outer_size := DisplayServer.window_get_size_with_decorations()
+	var decor_offset := client_pos - outer_pos
+	var target := usable.position + Vector2i(
+		int((usable.size.x - outer_size.x) * 0.5),
+		int((usable.size.y - outer_size.y) * 0.5))
+	target.x = maxi(target.x, usable.position.x)
+	target.y = maxi(target.y, usable.position.y)
+	DisplayServer.window_set_position(target + decor_offset)
+
 func _position_window() -> void:
 	if OS.has_feature("web"):
 		return
@@ -684,6 +715,7 @@ func _begin_local(data: Dictionary) -> void:
 		backdrop.visible = false
 	if fullscreen_button:
 		fullscreen_button.visible = false
+	_set_zoom(false)
 	hud.visible = true
 	audio.stop_all()
 	audio.play("intro")
@@ -1270,6 +1302,13 @@ func _sync_fruit() -> void:
 
 # --------------------------------------------------------------------- input
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if state in [Config.READY, Config.PLAYING] and not lobby.visible:
+			var s := world.scale.x
+			var rect := Rect2(world.position, Vector2(Config.MAZE_W, Config.MAZE_H) * s)
+			if rect.has_point(event.position) or zoomed:
+				_set_zoom(not zoomed)
+				return
 	if event is InputEventKey and event.pressed and not event.echo:
 		_handle_key(event.keycode, event.physical_keycode)
 
@@ -1277,6 +1316,10 @@ func _start_key(k: int) -> bool:
 	return k == KEY_ENTER or k == KEY_KP_ENTER or k == KEY_SPACE
 
 func _handle_key(k: int, pk: int) -> void:
+	if k == KEY_Z:
+		if state in [Config.READY, Config.PLAYING]:
+			_set_zoom(not zoomed)
+		return
 	if k == KEY_F11 or k == KEY_F:
 		toggle_fullscreen()
 		return
@@ -1648,6 +1691,7 @@ func _begin_online(data: Dictionary, is_host: bool) -> void:
 		backdrop.visible = false
 	if fullscreen_button:
 		fullscreen_button.visible = false
+	_set_zoom(false)
 	hud.visible = true
 	audio.stop_all()
 	audio.play("intro")
@@ -1681,6 +1725,7 @@ func _return_to_lobby() -> void:
 	_reset_to_lobby("")
 
 func _reset_to_lobby(message := "") -> void:
+	_set_zoom(false)
 	state = Config.LOBBY
 	paused = false
 	world.visible = false
