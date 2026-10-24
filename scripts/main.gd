@@ -73,7 +73,6 @@ var touch_ui
 var backdrop
 var intro
 var fullscreen_button
-var hd_button
 var use_hd_sprites := false
 var nostalgia_mode := false
 var last_input_seq: Dictionary = {}
@@ -346,33 +345,6 @@ func _create_online_ui() -> void:
 	fullscreen_button.pressed.connect(toggle_fullscreen)
 	fs_layer.add_child(fullscreen_button)
 
-	hd_button = Button.new()
-	hd_button.name = "HDToggle"
-	hd_button.text = "HD: OFF"
-	hd_button.position = Vector2(16, 620)
-	hd_button.size = Vector2(96, 28)
-	hd_button.focus_mode = Control.FOCUS_NONE
-	hd_button.add_theme_font_override("font", btn_font)
-	hd_button.add_theme_font_size_override("font_size", 6)
-	hd_button.add_theme_color_override("font_color", Config.YELLOW)
-	hd_button.add_theme_color_override("font_hover_color", Config.CYAN)
-	hd_button.add_theme_color_override("font_pressed_color", Config.CYAN)
-	var hd_normal := StyleBoxFlat.new()
-	hd_normal.bg_color = Color(0.03, 0.06, 0.12, 0.82)
-	hd_normal.border_color = Color(0.85, 0.7, 0.1, 0.85)
-	hd_normal.set_border_width_all(1)
-	hd_normal.set_corner_radius_all(6)
-	var hd_hover := StyleBoxFlat.new()
-	hd_hover.bg_color = Color(0.06, 0.12, 0.22, 0.95)
-	hd_hover.border_color = Config.YELLOW
-	hd_hover.set_border_width_all(1)
-	hd_hover.set_corner_radius_all(6)
-	hd_button.add_theme_stylebox_override("normal", hd_normal)
-	hd_button.add_theme_stylebox_override("hover", hd_hover)
-	hd_button.add_theme_stylebox_override("pressed", hd_hover)
-	hd_button.pressed.connect(toggle_hd)
-	fs_layer.add_child(hd_button)
-
 func _show_intro() -> void:
 	state = Config.LOBBY
 	paused = false
@@ -399,12 +371,6 @@ func _enter_menu() -> void:
 		lobby.set_connected(net != null and net.status == "online")
 	if fullscreen_button:
 		fullscreen_button.visible = true
-
-func toggle_hd() -> void:
-	use_hd_sprites = not use_hd_sprites
-	_build_frames()
-	if hd_button:
-		hd_button.text = "HD: " + ("ON" if use_hd_sprites else "OFF")
 
 func toggle_fullscreen() -> void:
 	if OS.has_feature("web"):
@@ -745,9 +711,6 @@ func _process(delta: float) -> void:
 		backdrop.visible = state == Config.LOBBY
 	if fullscreen_button:
 		fullscreen_button.visible = state == Config.LOBBY
-	if hd_button:
-		hd_button.visible = state == Config.LOBBY
-		hd_button.text = "HD: " + ("ON" if use_hd_sprites else "OFF")
 
 	if state == Config.LOBBY:
 		menu_time += dt
