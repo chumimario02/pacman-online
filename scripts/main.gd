@@ -1530,7 +1530,7 @@ func build_start_payload() -> Dictionary:
 		used_colors[chosen] = true
 		roster_out.append({
 			"id": "ai_pac_%d" % idx,
-			"name": "CPU %d" % (idx + 1),
+			"name": "BOT",
 			"color": chosen,
 			"role": "pac",
 			"pac_index": idx,

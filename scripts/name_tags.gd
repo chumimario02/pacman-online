@@ -39,5 +39,5 @@ func _draw_name(text: String, pos: Vector2, color: Color) -> void:
 	if font == null or text == "":
 		return
 	var w := 90.0
-	draw_string(font, Vector2(pos.x - w * 0.5, pos.y), text, HORIZONTAL_ALIGNMENT_CENTER, w, 6, Color(0, 0, 0, 0.7))
-	draw_string(font, Vector2(pos.x - w * 0.5, pos.y - 1.0), text, HORIZONTAL_ALIGNMENT_CENTER, w, 6, color)
+	draw_string(font, Vector2(pos.x - w * 0.5, pos.y), text, HORIZONTAL_ALIGNMENT_CENTER, w, 8, Color(0, 0, 0, 0.7))
+	draw_string(font, Vector2(pos.x - w * 0.5, pos.y - 1.0), text, HORIZONTAL_ALIGNMENT_CENTER, w, 8, color)
