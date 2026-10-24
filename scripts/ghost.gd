@@ -298,6 +298,9 @@ func _near_pac() -> bool:
 func sync_visual() -> void:
 	position = pos()
 	if state in ["eaten", "dead"]:
+		if game != null and game.use_hd_sprites:
+			_set_anim("flash", int(anim / 0.14) % 2)
+			return
 		if eaten_flash > 0.0:
 			_set_anim("flash", 0)
 			return
@@ -341,6 +344,9 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 	if net_prev_pos.distance_to(net_target_pos) > Config.MAZE_W * 0.5:
 		net_prev_pos = net_target_pos
 	if state in ["eaten", "dead"]:
+		if game != null and game.use_hd_sprites:
+			_set_anim("flash", int(net_anim / 0.14) % 2)
+			return
 		if eaten_flash > 0.0:
 			_set_anim("flash", 0)
 			return
