@@ -429,17 +429,21 @@ func _set_zoom(enabled: bool) -> void:
 	if enabled:
 		var frame_w := float(Config.MAZE_W + 18)
 		var frame_h := float(Config.MAZE_H + 18)
-		var s := minf((float(Config.WIDTH) - 60.0) / frame_w, (float(Config.HEIGHT) - 60.0) / frame_h)
+		var s := minf((float(Config.WIDTH) - 20.0) / frame_w, (float(Config.HEIGHT) - 20.0) / frame_h)
 		world.scale = Vector2(s, s)
 		var target := Vector2((float(Config.WIDTH) - frame_w * s) * 0.5, (float(Config.HEIGHT) - frame_h * s) * 0.5)
 		zoom_base_pos = target + Vector2(9.0, 9.0) * s
 		world.position = zoom_base_pos
+		if maze_view:
+			maze_view.hide_frame = true
 		if hud:
 			hud.visible = false
 	else:
 		world.scale = Vector2.ONE
 		zoom_base_pos = Vector2.ZERO
 		world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
+		if maze_view:
+			maze_view.hide_frame = false
 		if hud and state != Config.LOBBY:
 			hud.visible = true
 	_update_touch_visibility()

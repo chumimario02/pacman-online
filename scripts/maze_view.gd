@@ -6,6 +6,7 @@ var maze
 var maze_texture: Texture2D
 var power_texture: Texture2D
 var power_glow_texture: Texture2D
+var hide_frame := false
 
 func _ready() -> void:
 	maze_texture = load("res://assets/maze_bg.png")
@@ -34,10 +35,11 @@ func _draw() -> void:
 		else:
 			draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Config.SALMON)
 
-	var frame := Rect2(-9, -9, Config.MAZE_W + 18, Config.MAZE_H + 18)
-	draw_rect(frame, Color(0.0706, 0.1098, 0.1882, 1.0), false, 1.0)
-	_brackets(Rect2(frame.position + Vector2(2, 2), frame.size - Vector2(4, 4)),
-		Color(0.0, 0.4706, 0.6275, 1.0), 16.0, 1.0)
+	if not hide_frame:
+		var frame := Rect2(-9, -9, Config.MAZE_W + 18, Config.MAZE_H + 18)
+		draw_rect(frame, Color(0.0706, 0.1098, 0.1882, 1.0), false, 1.0)
+		_brackets(Rect2(frame.position + Vector2(2, 2), frame.size - Vector2(4, 4)),
+			Color(0.0, 0.4706, 0.6275, 1.0), 16.0, 1.0)
 
 func _brackets(rect: Rect2, color: Color, length: float, width: float) -> void:
 	var corners := [
