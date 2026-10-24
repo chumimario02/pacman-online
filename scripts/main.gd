@@ -671,6 +671,9 @@ func _begin_local(data: Dictionary) -> void:
 	hud.visible = true
 	audio.stop_all()
 	audio.play("intro")
+	pending_inputs.clear()
+	local_input_seq = 0
+	last_snapshot_time = 0.0
 	_update_touch_visibility()
 	audio.stop_all()
 
@@ -1626,6 +1629,9 @@ func _begin_online(data: Dictionary, is_host: bool) -> void:
 	net_events = []
 	client_snapshot_seen = false
 	client_paused = false
+	pending_inputs.clear()
+	local_input_seq = 0
+	last_snapshot_time = 0.0
 	if is_host:
 		_host_send_snapshot(true)
 	_update_touch_visibility()
