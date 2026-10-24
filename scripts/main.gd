@@ -1135,6 +1135,10 @@ func ghost_target(g) -> Vector2i:
 	if g.ghost_name == "blinky":
 		return pt
 	if g.ghost_name == "pinky":
+		# En el original, si Pac-Man mira hacia arriba, Pinky apunta
+		# 4 casillas arriba y 4 a la izquierda por el bug de desbordamiento.
+		if d == Vector2i(0, -1):
+			return pt + Vector2i(-4, -4)
 		return pt + d * 4
 	if g.ghost_name == "inky":
 		var b: Vector2i = Config.HOUSE_EXIT
@@ -1143,10 +1147,12 @@ func ghost_target(g) -> Vector2i:
 				b = other.tile
 				break
 		var p2: Vector2i = pt + d * 2
+		if d == Vector2i(0, -1):
+			p2 = pt + Vector2i(-2, -2)
 		return p2 * 2 - b
 	var dx: int = g.tile.x - pt.x
 	var dy: int = g.tile.y - pt.y
-	if dx * dx + dy * dy > 64:
+	if dx * dx + dy * dy >= 64:
 		return pt
 	var ct: Vector2i = Config.SCATTER_TARGETS["clyde"]
 	return ct
