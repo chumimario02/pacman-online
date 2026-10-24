@@ -623,6 +623,9 @@ func _reset_after_death(p) -> void:
 		state = Config.PLAYING
 		return
 	p.respawn(p.spawn_tile)
+	for g in ghosts:
+		if g != null and is_instance_valid(g):
+			g.reset_to_house()
 	mode = "scatter"
 	mode_idx = 0
 	mode_timer = Config.MODE_SCHEDULE[0][0]

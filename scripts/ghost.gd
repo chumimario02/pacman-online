@@ -60,6 +60,22 @@ func set_player(p_id: String, p_name := "") -> void:
 	player_id = p_id
 	player_name = p_name
 
+func reset_to_house() -> void:
+	spawn = Config.GHOST_START[ghost_name]
+	tile = spawn
+	dir = null
+	progress = 0.0
+	state = "normal" if ghost_name == "blinky" else "house"
+	frightened = false
+	release = 0.0 if is_player else Config.GHOST_RELEASE[ghost_name]
+	house_timer = 0.0
+	dead_timer = 0.0
+	eaten_flash = 0.0
+	desired_dir = null
+	if state == "normal":
+		_choose()
+	sync_visual()
+
 func pos() -> Vector2:
 	var c: Vector2 = maze.center(tile)
 	if state == "house":
