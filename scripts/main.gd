@@ -74,6 +74,7 @@ var intro
 var fullscreen_button
 var hd_button
 var use_hd_sprites := false
+var nostalgia_mode := false
 var last_input_seq: Dictionary = {}
 var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
