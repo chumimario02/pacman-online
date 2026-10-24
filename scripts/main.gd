@@ -95,6 +95,9 @@ var client_paused := false
 var local_input_seq := 0
 var pending_inputs: Array = []
 var last_snapshot_time := 0.0
+var host_local_tile: Vector2i = Vector2i.ZERO
+var host_local_progress := 0.0
+var host_local_dir: String = ""
 
 func _ready() -> void:
 	randomize()
@@ -739,6 +742,12 @@ func _client_process(dt: float) -> void:
 			continue
 		if p == _local_pac():
 			p.update_pac(dt)
+			var dist: int = abs(p.tile.x - host_local_tile.x) + abs(p.tile.y - host_local_tile.y)
+			if dist > 1:
+				p.tile = host_local_tile
+				p.progress = host_local_progress
+				if Config.DIRS.has(host_local_dir):
+					p.dir = Config.DIRS[host_local_dir]
 		else:
 			p.interpolate_network(dt)
 	for g in ghosts:
@@ -746,6 +755,12 @@ func _client_process(dt: float) -> void:
 			continue
 		if g == _local_ghost():
 			g.update_ghost(dt)
+			var gdist: int = abs(g.tile.x - host_local_tile.x) + abs(g.tile.y - host_local_tile.y)
+			if gdist > 1:
+				g.tile = host_local_tile
+				g.progress = host_local_progress
+				if Config.DIRS.has(host_local_dir):
+					g.dir = Config.DIRS[host_local_dir]
 		else:
 			g.interpolate_network(dt)
 	_sync_visuals_client()
@@ -1828,6 +1843,9 @@ func _apply_snapshot(data: Dictionary) -> void:
 			p.color_id = str(e.get("c", p.color_id))
 			p.score = int(e.get("sc", p.score))
 			p.lives = int(e.get("lv", p.lives))
+			host_local_tile = Vector2i(int(e.get("x", 0)), int(e.get("y", 0)))
+			host_local_progress = float(e.get("p", 0.0))
+			host_local_dir = str(e.get("d", ""))
 			continue
 		p.color_id = str(e.get("c", p.color_id))
 		p.score = int(e.get("sc", p.score))
@@ -1848,6 +1866,9 @@ func _apply_snapshot(data: Dictionary) -> void:
 			local_ghost_seq = int(e.get("seq", 0))
 			g.score = int(e.get("sc", g.score))
 			var st := str(e.get("st", "normal"))
+			host_local_tile = Vector2i(int(e.get("x", 0)), int(e.get("y", 0)))
+			host_local_progress = float(e.get("p", 0.0))
+			host_local_dir = str(e.get("d", ""))
 			if st in ["eaten", "dead", "house"]:
 				g.apply_network(
 					Vector2i(int(e.get("x", 0)), int(e.get("y", 0))),
