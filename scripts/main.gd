@@ -426,9 +426,12 @@ func toggle_fullscreen() -> void:
 func _set_zoom(enabled: bool) -> void:
 	zoomed = enabled
 	if enabled:
-		var s := minf((float(Config.WIDTH) - 40.0) / float(Config.MAZE_W + 18), (float(Config.HEIGHT) - 40.0) / float(Config.MAZE_H + 18))
+		var frame_w := float(Config.MAZE_W + 18)
+		var frame_h := float(Config.MAZE_H + 18)
+		var s := minf((float(Config.WIDTH) - 60.0) / frame_w, (float(Config.HEIGHT) - 60.0) / frame_h)
 		world.scale = Vector2(s, s)
-		world.position = Vector2((float(Config.WIDTH) - (Config.MAZE_W + 18) * s) * 0.5, (float(Config.HEIGHT) - (Config.MAZE_H + 18) * s) * 0.5)
+		var target := Vector2((float(Config.WIDTH) - frame_w * s) * 0.5, (float(Config.HEIGHT) - frame_h * s) * 0.5)
+		world.position = target + Vector2(9.0, 9.0) * s
 		if hud:
 			hud.visible = false
 	else:
