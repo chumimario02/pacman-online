@@ -4,6 +4,7 @@ class_name PacMan
 var maze
 var tile: Vector2i = Config.START_TILE
 var dir = Config.DIRS["left"]
+var facing = Config.DIRS["left"]
 var desired = null
 var progress := 0.0
 var move_speed := Config.PACMAN_SPEED
@@ -57,6 +58,7 @@ func _apply_tint() -> void:
 func respawn(at_tile: Vector2i = spawn_tile) -> void:
 	tile = at_tile
 	dir = Config.DIRS["left"]
+	facing = dir
 	desired = null
 	progress = 0.0
 	arrivals = [tile]
@@ -129,8 +131,10 @@ func _choose() -> void:
 		var nt = maze.neighbor(tile, desired)
 		if maze.is_walkable(nt, true):
 			dir = desired
+			facing = dir
 			return
 	if dir != null and maze.is_walkable(maze.neighbor(tile, dir), true):
+		facing = dir
 		return
 	dir = null
 
@@ -147,7 +151,7 @@ func _arrive() -> void:
 
 func sync_visual() -> void:
 	position = pos()
-	rotation = angle_for_dir(dir)
+	rotation = angle_for_dir(dir if dir != null else facing)
 	var f := 1
 	if moving:
 		f = int(anim / 0.06) % 4
@@ -165,6 +169,8 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 		net_prev_pos = net_target_pos
 	tile = tile_ref
 	dir = target_dir
+	if target_dir != null:
+		facing = target_dir
 	progress = prog
 	net_moving = is_moving
 	net_anim = net_animation
@@ -174,7 +180,7 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 	net_lerp = 0.0
 	if net_prev_pos.distance_to(net_target_pos) > Config.MAZE_W * 0.5:
 		net_prev_pos = net_target_pos
-	rotation = angle_for_dir(dir)
+	rotation = angle_for_dir(dir if dir != null else facing)
 	frame = int(net_anim / 0.06) % 4 if net_moving else 1
 	pause()
 

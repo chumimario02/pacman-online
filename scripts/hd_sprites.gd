@@ -82,13 +82,13 @@ static func _sheet_cell_trim(sheet: Image, x: int, y: int, w: int, h: int) -> Im
 	var cw := maxx - minx + 1
 	var ch := maxy - miny + 1
 	var crop := region.get_region(Rect2i(minx, miny, cw, ch))
-	var scale := minf(32.0 / float(cw), 32.0 / float(ch))
+	var scale := minf(36.0 / float(cw), 36.0 / float(ch))
 	var nw := maxi(1, int(round(cw * scale)))
 	var nh := maxi(1, int(round(ch * scale)))
 	crop.resize(nw, nh, Image.INTERPOLATE_BILINEAR)
-	var out := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	var out := Image.create(36, 36, false, Image.FORMAT_RGBA8)
 	out.fill(Color(0, 0, 0, 0))
-	out.blit_rect(crop, Rect2i(0, 0, nw, nh), Vector2i((32 - nw) / 2, (32 - nh) / 2))
+	out.blit_rect(crop, Rect2i(0, 0, nw, nh), Vector2i((36 - nw) / 2, (36 - nh) / 2))
 	return ImageTexture.create_from_image(out)
 
 static func _sheet_cell(sheet: Image, x: int, y: int, w: int, h: int) -> ImageTexture:
@@ -118,7 +118,7 @@ static func build_pac_frames() -> SpriteFrames:
 	var sheet := _sheet()
 	if sheet != null:
 		for y in [2, 52, 102, 152, 202, 252, 202, 152, 102, 52]:
-			sf.add_frame("chomp", _sheet_cell(sheet, 854, y, 50, 50))
+			sf.add_frame("chomp", _sheet_cell(sheet, 854, y, 43, 44))
 	sf.set_animation_loop("chomp", true)
 	sf.set_animation_speed("chomp", 18.0)
 	return sf
@@ -158,6 +158,7 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		sf.set_animation_loop(anim_name, false)
 		sf.set_animation_speed(anim_name, 1.0)
 	return sf
+
 
 
 
