@@ -475,6 +475,14 @@ func _position_window() -> void:
 	target.y = maxi(target.y, usable.position.y)
 	DisplayServer.window_set_position(target + decor_offset)
 
+func _apply_hd_look(node) -> void:
+	if node == null or not use_hd_sprites:
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://scripts/sprite_blur.gdshader")
+	node.material = mat
+	node.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
 	for p in pacs:
@@ -487,6 +495,7 @@ func _spawn_actors() -> void:
 		pac = PacMan.new()
 		pac.name = "PacMan"
 		pac.setup(maze, pac_frames, "local", "yellow", Config.START_TILE)
+		_apply_hd_look(pac)
 		pac.player_name = "TÚ"
 		if old_stats.has("local"):
 			pac.score = int(old_stats["local"]["score"])
@@ -509,6 +518,7 @@ func _spawn_actors() -> void:
 			var p := PacMan.new()
 			p.name = "Pac_" + str(e.get("id", idx))
 			p.setup(maze, pac_frames, str(e.get("id", "")), str(e.get("color", "yellow")), spawn)
+			_apply_hd_look(p)
 			p.player_name = str(e.get("name", "JUGADOR"))
 			p.is_ai = bool(e.get("ai", false))
 			p.connected = bool(e.get("connected", true))
@@ -533,6 +543,7 @@ func _spawn_actors() -> void:
 		var g := Ghost.new()
 		g.name = n
 		g.setup(self, maze, n, ghost_frames[n])
+		_apply_hd_look(g)
 		g.z_index = 4
 		var assigned = null
 		for e in roster:
