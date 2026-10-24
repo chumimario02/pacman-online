@@ -46,7 +46,7 @@ static func _asset(path: String) -> ImageTexture:
 
 static func _tint_cell(sheet: Image, x: int, y: int, w: int, h: int, tint: Color) -> ImageTexture:
 	var region := sheet.get_region(Rect2i(x, y, w, h))
-	var out_size := 48
+	var out_size := 32
 	var scale := minf(float(out_size) / float(w), float(out_size) / float(h))
 	var nw := maxi(1, int(round(w * scale)))
 	var nh := maxi(1, int(round(h * scale)))
@@ -93,7 +93,7 @@ static func _sheet_cell_trim(sheet: Image, x: int, y: int, w: int, h: int) -> Im
 
 static func _sheet_cell(sheet: Image, x: int, y: int, w: int, h: int) -> ImageTexture:
 	var region := sheet.get_region(Rect2i(x, y, w, h))
-	var out_size := 48
+	var out_size := 32
 	var scale := minf(float(out_size) / float(w), float(out_size) / float(h))
 	var nw := maxi(1, int(round(w * scale)))
 	var nh := maxi(1, int(round(h * scale)))
@@ -158,5 +158,6 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		sf.set_animation_loop(anim_name, false)
 		sf.set_animation_speed(anim_name, 1.0)
 	return sf
+
 
 
