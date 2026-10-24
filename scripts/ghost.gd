@@ -282,6 +282,15 @@ func _set_anim(anim_name: String, f: int) -> void:
 	frame = f
 	pause()
 
+func _near_pac() -> bool:
+	if game == null:
+		return false
+	for p in game.pacs:
+		if p != null and p.active:
+			if abs(p.tile.x - tile.x) + abs(p.tile.y - tile.y) <= 4:
+				return true
+	return false
+
 func sync_visual() -> void:
 	position = pos()
 	if state in ["eaten", "dead"]:
@@ -290,7 +299,7 @@ func sync_visual() -> void:
 			eyes_name = "eyes_" + _dir_name(dir)
 		_set_anim(eyes_name, 0)
 	elif frightened and state in ["normal", "leaving", "house"]:
-		var flash: bool = game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0
+		var flash: bool = _near_pac() or (game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0)
 		_set_anim("flash" if flash else "fright", int(anim / 0.20) % 2)
 	else:
 		_set_anim(_dir_name(dir), int(anim / 0.14) % 2)
@@ -327,7 +336,7 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 			eyes_name = "eyes_" + _dir_name(dir)
 		_set_anim(eyes_name, 0)
 	elif frightened and state in ["normal", "leaving", "house"]:
-		var flash: bool = game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0
+		var flash: bool = _near_pac() or (game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0)
 		_set_anim("flash" if flash else "fright", int(net_anim / 0.20) % 2)
 	else:
 		_set_anim(_dir_name(dir), int(net_anim / 0.14) % 2)
