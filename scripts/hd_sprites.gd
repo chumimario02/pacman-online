@@ -36,9 +36,10 @@ static func _tex(img: Image) -> ImageTexture:
 static func build_pac_frames() -> SpriteFrames:
 	var sf := SpriteFrames.new()
 	sf.add_animation("chomp")
-	for frame in range(2):
+	var mouths := [0.75, 0.45, 0.12, 0.45]
+	for frame in range(mouths.size()):
 		var img := _img()
-		var mouth := 0.45 if frame == 0 else 0.08
+		var mouth: float = mouths[frame]
 		var da := 0.0  # right-facing; sprite rotates via game code
 		for y in range(64):
 			for x in range(64):
@@ -56,23 +57,30 @@ static func build_pac_frames() -> SpriteFrames:
 					img.set_pixel(x, y, Color(1.0, 0.9, 0.0, 1.0))
 		sf.add_frame("chomp", _tex(img))
 	sf.set_animation_loop("chomp", true)
-	sf.set_animation_speed("chomp", 12.0)
+	sf.set_animation_speed("chomp", 18.0)
 	return sf
 
 static func _ghost_body(img: Image, color: Color, frame: int) -> void:
-	# Dome + skirt
 	for y in range(64):
 		for x in range(64):
 			var dx := float(x) - 32.0
 			var dy := float(y) - 26.0
-			var in_dome := (dx * dx + dy * dy <= 24.0 * 24.0) and y <= 34
-			var in_skirt: bool = (y >= 28 and y <= 54 and abs(dx) <= 22.0)
-			if in_dome or in_skirt:
-				# wavy bottom
-				if y >= 48:
-					var wave := int((x + (frame * 8)) / 8) % 2
-					if wave == 0 and y > 50:
-						continue
+			var inside := false
+			# Dome
+			if y <= 34 and (dx * dx + dy * dy <= 24.0 * 24.0):
+				inside = true
+			# Body
+			elif y > 24 and y <= 44 and abs(dx) <= 20.0:
+				inside = true
+			# Triangular skirt
+			elif y > 44 and y <= 56 and abs(dx) <= 20.0:
+				var tri := fmod(float(x) + frame * 5.0, 12.0)
+				if tri > 6.0:
+					tri = 12.0 - tri
+				var maxy := 44.0 + tri
+				if float(y) <= maxy:
+					inside = true
+			if inside:
 				img.set_pixel(x, y, color)
 
 static func _ghost_eyes(img: Image, dir_name: String, frightened: bool, flash: bool) -> void:
