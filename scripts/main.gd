@@ -743,7 +743,7 @@ func _client_process(dt: float) -> void:
 		if p == _local_pac():
 			p.update_pac(dt)
 			var dist: int = abs(p.tile.x - host_local_tile.x) + abs(p.tile.y - host_local_tile.y)
-			if dist > 1:
+			if dist > 5:
 				p.tile = host_local_tile
 				p.progress = host_local_progress
 				if Config.DIRS.has(host_local_dir):
@@ -756,7 +756,7 @@ func _client_process(dt: float) -> void:
 		if g == _local_ghost():
 			g.update_ghost(dt)
 			var gdist: int = abs(g.tile.x - host_local_tile.x) + abs(g.tile.y - host_local_tile.y)
-			if gdist > 1:
+			if gdist > 5:
 				g.tile = host_local_tile
 				g.progress = host_local_progress
 				if Config.DIRS.has(host_local_dir):
