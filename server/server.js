@@ -196,7 +196,7 @@ function createRoom(ws, msg) {
     code,
     hostId: player.id,
     players: new Map([[player.id, player]]),
-    settings: { bots: 2 },
+    settings: { bots: 2, mode: 'classic' },
     started: false,
     createdAt: now(),
   };
@@ -329,7 +329,8 @@ function handleMessage(ws, raw) {
     const data = msg.data || {};
     const rawBots = Number(data.bots);
     const bots = Number.isFinite(rawBots) ? Math.max(0, Math.min(4, Math.trunc(rawBots))) : 2;
-    room.settings = { bots };
+    const mode = data.mode === 'remake' ? 'remake' : 'classic';
+    room.settings = { bots, mode };
     broadcastRoom(room);
     return;
   }

@@ -11,6 +11,7 @@ var selected_color := "yellow"
 var selected_ghost := "blinky"
 var selected_bots := 2
 var selected_ghost_bots := -1
+var selected_maze_mode := "classic"
 var connected := false
 var local_practice := false
 
@@ -36,6 +37,7 @@ var bot_plus: Button
 var bots_ghost_label: Label
 var bot_ghost_minus: Button
 var bot_ghost_plus: Button
+var mode_button: Button
 var color_buttons: Array = []
 var create_button: Button
 var join_button: Button
@@ -215,6 +217,11 @@ func _build() -> void:
 	bot_ghost_plus = _button("+", Vector2(800, 470), Vector2(28, 28), Config.WHITE)
 	bot_ghost_plus.pressed.connect(func(): _on_ghost_bots(1))
 
+	_label("MODO", 8, Config.GREY, Vector2(760, 420))
+	mode_button = _button("CLASSIC", Vector2(760, 438), Vector2(120, 28), Config.CYAN)
+	mode_button.add_theme_font_size_override("font_size", 6)
+	mode_button.pressed.connect(_on_maze_mode)
+
 	touch_check = CheckBox.new()
 	touch_check.text = "CONTROLES TACTILES"
 	touch_check.position = Vector2(535, 505)
@@ -312,6 +319,8 @@ func on_room(r: Dictionary) -> void:
 	var settings = r.get("settings", {})
 	if typeof(settings) == TYPE_DICTIONARY:
 		selected_bots = clampi(int(settings.get("bots", selected_bots)), 0, 4)
+		var mm := str(settings.get("mode", selected_maze_mode))
+		selected_maze_mode = "remake" if mm == "remake" else "classic"
 	var found := false
 	for p in r.get("players", []):
 		if str(p.get("id", "")) == player_id:
@@ -390,7 +399,7 @@ func _send_profile() -> void:
 				p["role"] = selected_role
 				p["color"] = selected_color
 				p["ghost_name"] = selected_ghost
-		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots}
+		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots, "mode": selected_maze_mode}
 		refresh_ui()
 		return
 	if game and game.net:
@@ -453,6 +462,8 @@ func refresh_ui() -> void:
 	bots_ghost_label.text = "BOTS FANTASMAS: %d" % effective_ghost_bots
 	bot_ghost_minus.visible = host and room_ui.visible
 	bot_ghost_plus.visible = host and room_ui.visible
+	mode_button.visible = host and room_ui.visible
+	mode_button.text = "REMAKE" if selected_maze_mode == "remake" else "CLASSIC"
 	role_pac_button.text = ("> " if selected_role == "pac" else "") + "PAC-MAN"
 	role_ghost_button.text = ("> " if selected_role == "ghost" else "") + "FANTASMA"
 
@@ -565,11 +576,23 @@ func _on_bots(delta: int) -> void:
 		return
 	selected_bots = clampi(selected_bots + delta, 0, 4)
 	if local_practice:
-		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots}
+		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots, "mode": selected_maze_mode}
 		refresh_ui()
 		return
 	if game and game.net:
-		game.net.send_dict({"type": "lobby", "data": {"bots": selected_bots}})
+		game.net.send_dict({"type": "lobby", "data": {"bots": selected_bots, "mode": selected_maze_mode}})
+	refresh_ui()
+
+func _on_maze_mode() -> void:
+	if not _is_host():
+		return
+	selected_maze_mode = "remake" if selected_maze_mode == "classic" else "classic"
+	if local_practice:
+		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots, "mode": selected_maze_mode}
+		refresh_ui()
+		return
+	if game and game.net:
+		game.net.send_dict({"type": "lobby", "data": {"bots": selected_bots, "mode": selected_maze_mode}})
 	refresh_ui()
 
 func _on_ghost_bots(delta: int) -> void:
@@ -583,7 +606,7 @@ func _on_ghost_bots(delta: int) -> void:
 		selected_ghost_bots = effective
 	selected_ghost_bots = clampi(selected_ghost_bots + delta, 0, 4)
 	if local_practice:
-		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots}
+		room["settings"] = {"bots": selected_bots, "ghost_bots": selected_ghost_bots, "mode": selected_maze_mode}
 		refresh_ui()
 		return
 	if game and game.net:

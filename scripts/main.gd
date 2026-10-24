@@ -81,6 +81,7 @@ var zoomed := false
 var zoom_base_pos := Vector2.ZERO
 var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
+var maze_mode := "classic"
 var roster: Array = []
 var online_ghost_names: Array = []
 var local_custom_mode := false
@@ -191,7 +192,7 @@ func _load_assets() -> void:
 		fruit_glow_texture = load("res://assets/fruit_glow.png")
 
 func _build_frames() -> void:
-	if use_hd_sprites:
+	if use_hd_sprites or maze_mode == "remake":
 		pac_frames = HDSprites.build_pac_frames()
 		ghost_frames.clear()
 		for n in GHOST_NAMES:
@@ -480,6 +481,11 @@ func _apply_hd_look(node) -> void:
 		return
 	node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
+func _apply_maze_mode() -> void:
+	if maze_view == null:
+		return
+	maze_view.modulate = Color(0.55, 0.75, 1.0) if maze_mode == "remake" else Color.WHITE
+
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
 	for p in pacs:
@@ -647,6 +653,9 @@ func start_new_game() -> void:
 func start_local_single() -> void:
 	online_role = "offline"
 	online_mode = MODE_TEAM
+	maze_mode = "classic"
+	_build_frames()
+	_apply_maze_mode()
 	roster = []
 	online_ghost_names = []
 	local_player_id = "local"
@@ -695,6 +704,9 @@ func start_local_custom() -> void:
 func _begin_local(data: Dictionary) -> void:
 	online_role = "offline"
 	online_mode = str(data.get("mode", MODE_TEAM))
+	maze_mode = str(data.get("maze_mode", "classic"))
+	_build_frames()
+	_apply_maze_mode()
 	roster = data.get("roster", [])
 	online_ghost_names = []
 	for gn in data.get("ghosts", []):
@@ -1663,6 +1675,7 @@ func build_start_payload() -> Dictionary:
 		"bots": bot_count,
 		"roster": roster_out,
 		"ghosts": active_ghosts,
+		"maze_mode": str(lobby.selected_maze_mode) if lobby != null else "classic",
 		"seed": randi(),
 	}
 
@@ -1681,7 +1694,10 @@ func start_host_game() -> void:
 func _begin_online(data: Dictionary, is_host: bool) -> void:
 	online_role = "host" if is_host else "client"
 	online_mode = str(data.get("mode", MODE_TEAM))
+	maze_mode = str(data.get("maze_mode", "classic"))
 	roster = data.get("roster", [])
+	_build_frames()
+	_apply_maze_mode()
 	local_custom_mode = false
 	online_ghost_names = []
 	for gn in data.get("ghosts", []):
