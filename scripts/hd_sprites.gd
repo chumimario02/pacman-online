@@ -96,7 +96,7 @@ static func build_pac_frames() -> SpriteFrames:
 	sf.add_animation("chomp")
 	var sheet := _sheet()
 	if sheet != null:
-		for y in [2, 52, 102, 152]:
+		for y in [2, 52, 102, 152, 102, 52]:
 			sf.add_frame("chomp", _sheet_cell_trim(sheet, 854, y, 50, 50))
 	sf.set_animation_loop("chomp", true)
 	sf.set_animation_speed("chomp", 12.0)
