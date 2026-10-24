@@ -476,12 +476,9 @@ func _position_window() -> void:
 	DisplayServer.window_set_position(target + decor_offset)
 
 func _apply_hd_look(node) -> void:
-	if node == null or not use_hd_sprites:
+	if node == null:
 		return
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://scripts/sprite_blur.gdshader")
-	node.material = mat
-	node.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	node.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
