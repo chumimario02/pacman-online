@@ -100,11 +100,11 @@ static func _ghost_eyes(img: Image, dir_name: String, frightened: bool, flash: b
 		"up": py = -4.0
 		"down": py = 4.0
 	# left eye
-	_circle(img, 20.0, 24.0, 7.0, eye_color)
-	_circle(img, 20.0 + px, 24.0 + py, 3.0, pupil_color)
+	_circle(img, 20.0, 24.0, 9.0, eye_color)
+	_circle(img, 20.0 + px, 24.0 + py, 4.0, pupil_color)
 	# right eye
-	_circle(img, 44.0, 24.0, 7.0, eye_color)
-	_circle(img, 44.0 + px, 24.0 + py, 3.0, pupil_color)
+	_circle(img, 44.0, 24.0, 9.0, eye_color)
+	_circle(img, 44.0 + px, 24.0 + py, 4.0, pupil_color)
 
 static func _ghost_zigzag(img: Image, color: Color, y0: int) -> void:
 	for i in range(8):
@@ -141,11 +141,11 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		var img := _img()
 		_ghost_body(img, Color(0.1, 0.2, 0.9, 1), frame)
 		# scared eyes
-		_circle(img, 20.0, 24.0, 5.0, Color(1, 1, 1, 1))
-		_circle(img, 44.0, 24.0, 5.0, Color(1, 1, 1, 1))
+		_circle(img, 20.0, 24.0, 7.0, Color(1, 1, 1, 1))
+		_circle(img, 44.0, 24.0, 7.0, Color(1, 1, 1, 1))
 		# small pupils
-		_circle(img, 20.0, 24.0, 2.0, Color(0.8, 0.0, 0.0, 1))
-		_circle(img, 44.0, 24.0, 2.0, Color(0.8, 0.0, 0.0, 1))
+		_circle(img, 20.0, 24.0, 3.0, Color(0.8, 0.0, 0.0, 1))
+		_circle(img, 44.0, 24.0, 3.0, Color(0.8, 0.0, 0.0, 1))
 		# zigzag mouth
 		_ghost_zigzag(img, Color(1, 1, 1, 1), 38)
 		sf.add_frame("fright", _tex(img))
@@ -159,10 +159,10 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 		var eye_col := Color(0.1, 0.2, 0.9, 1) if frame == 0 else Color(1, 1, 1, 1)
 		var mouth_col := Color(0.1, 0.2, 0.9, 1) if frame == 0 else Color(1, 1, 1, 1)
 		_ghost_body(img, col, frame)
-		_circle(img, 20.0, 24.0, 5.0, eye_col)
-		_circle(img, 44.0, 24.0, 5.0, eye_col)
-		_circle(img, 20.0, 24.0, 2.0, mouth_col)
-		_circle(img, 44.0, 24.0, 2.0, mouth_col)
+		_circle(img, 20.0, 24.0, 7.0, eye_col)
+		_circle(img, 44.0, 24.0, 7.0, eye_col)
+		_circle(img, 20.0, 24.0, 3.0, mouth_col)
+		_circle(img, 44.0, 24.0, 3.0, mouth_col)
 		_ghost_zigzag(img, mouth_col, 38)
 		sf.add_frame("flash", _tex(img))
 	sf.set_animation_loop("flash", true)
@@ -180,12 +180,13 @@ static func build_ghost_frames(ghost_name: String) -> SpriteFrames:
 			"left": px = -4.0
 			"up": py = -4.0
 			"down": py = 4.0
-		_circle(img, 20.0, 24.0, 4.0, Color(1, 1, 1, 1))
+		_circle(img, 20.0, 24.0, 6.0, Color(1, 1, 1, 1))
 		_circle(img, 22.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
-		_circle(img, 44.0, 24.0, 4.0, Color(1, 1, 1, 1))
+		_circle(img, 44.0, 24.0, 6.0, Color(1, 1, 1, 1))
 		_circle(img, 42.0 + px, 24.0 + py, 2.0, Color(0.0, 0.2, 0.9, 1))
 		sf.add_frame(anim_name, _tex(img))
 		sf.set_animation_loop(anim_name, false)
 		sf.set_animation_speed(anim_name, 1.0)
 	return sf
+
 
