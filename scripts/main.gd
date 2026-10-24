@@ -554,6 +554,11 @@ func _reset_round_state() -> void:
 func _setup_level(new_game := false, silent := false) -> void:
 	maze.reset()
 	_spawn_actors()
+	if not new_game:
+		lives = 4
+		for p in pacs:
+			if p != null and is_instance_valid(p):
+				p.lives = 4
 	_reset_round_state()
 	state = Config.READY
 	paused = false
@@ -587,7 +592,7 @@ func _reset_after_death(p) -> void:
 
 func start_new_game() -> void:
 	score = 0
-	lives = 3
+	lives = 4
 	level = 1
 	next_extra = 10000
 	popups = []
@@ -657,7 +662,7 @@ func _begin_local(data: Dictionary) -> void:
 	local_player_id = "local"
 	level = 1
 	score = 0
-	lives = 3
+	lives = 4
 	next_extra = 10000
 	popups = []
 	particles = []
@@ -1621,7 +1626,7 @@ func _begin_online(data: Dictionary, is_host: bool) -> void:
 	local_player_id = net.player_id if net != null else ""
 	level = 1
 	score = 0
-	lives = 3
+	lives = 4
 	next_extra = 10000
 	popups = []
 	particles = []
@@ -2191,7 +2196,7 @@ func _run_smoke() -> void:
 
 	start_local_single()
 	_smoke_check(state == Config.READY, "new game starts in READY")
-	_smoke_check(lives == 3 and level == 1 and score == 0, "initial stats")
+	_smoke_check(lives == 4 and level == 1 and score == 0, "initial stats")
 	_smoke_check(pac != null and ghosts.size() == 4, "actors spawned")
 	_smoke_check(maze.remaining() == 244, "244 pellets")
 	_smoke_check(pac.tile == Config.START_TILE, "pacman at start tile")
@@ -2261,7 +2266,7 @@ func _run_smoke() -> void:
 	gh2.progress = 0.0
 	gh2.dir = null
 	_check_collisions()
-	_smoke_check(state == Config.DYING and pac.lives == 2, "ghost collision starts death")
+	_smoke_check(state == Config.DYING and pac.lives == 3, "ghost collision starts death")
 
 	start_local_single()
 	state = Config.PLAYING
@@ -2289,11 +2294,11 @@ func _run_smoke() -> void:
 	_smoke_check(maze.remaining() == 244, "next level refills pellets")
 
 	start_local_single()
-	lives = 3
+	lives = 4
 	score = 9990
 	next_extra = 10000
 	add_score(10)
-	_smoke_check(lives == 4 and score == 10000, "extra life at 10000 points")
+	_smoke_check(lives == 5 and score == 10000, "extra life at 10000 points")
 
 	var dirs := [Config.DIRS["left"], Config.DIRS["right"], Config.DIRS["up"], Config.DIRS["down"]]
 	for run in range(3):
