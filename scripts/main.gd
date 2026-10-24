@@ -428,12 +428,12 @@ func _set_zoom(enabled: bool) -> void:
 	if enabled:
 		var s := minf((float(Config.WIDTH) - 40.0) / float(Config.MAZE_W + 18), (float(Config.HEIGHT) - 40.0) / float(Config.MAZE_H + 18))
 		world.scale = Vector2(s, s)
-		world.position = Vector2((float(Config.WIDTH) - (Config.MAZE_W + 18) * s) * 0.5, (float(Config.HEIGHT) - (Config.MAZE_H + 18) * s) * 0.5)
+		world.position = _world_base_pos()
 		if hud:
 			hud.visible = false
 	else:
 		world.scale = Vector2.ONE
-		world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
+		world.position = _world_base_pos()
 		if hud and state != Config.LOBBY:
 			hud.visible = true
 	if OS.has_feature("web"):
@@ -452,6 +452,16 @@ func _set_zoom(enabled: bool) -> void:
 	target.x = maxi(target.x, usable.position.x)
 	target.y = maxi(target.y, usable.position.y)
 	DisplayServer.window_set_position(target + decor_offset)
+
+# Posicion base del mundo (sin shake). En zoom el laberinto queda centrado
+# en la pantalla; en modo normal usa la posicion fija del layout.
+func _world_base_pos() -> Vector2:
+	if zoomed:
+		var s := world.scale.x
+		return Vector2(
+			(float(Config.WIDTH) - float(Config.MAZE_W) * s) * 0.5,
+			(float(Config.HEIGHT) - float(Config.MAZE_H) * s) * 0.5)
+	return Vector2(Config.MAZE_X, Config.MAZE_Y)
 
 func _position_window() -> void:
 	if OS.has_feature("web"):
@@ -1234,7 +1244,7 @@ func _animate_death(p) -> void:
 		p.modulate.a = 1.0 - prog * 0.55
 
 func _sync_visuals() -> void:
-	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y) + _shake_offset()
+	world.position = _world_base_pos() + _shake_offset()
 
 	for p in pacs:
 		if p == null or not is_instance_valid(p):
@@ -1259,7 +1269,7 @@ func _sync_visuals() -> void:
 	_sync_fruit()
 
 func _sync_visuals_client() -> void:
-	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y) + _shake_offset()
+	world.position = _world_base_pos() + _shake_offset()
 	for p in pacs:
 		if p == null or not is_instance_valid(p):
 			continue
