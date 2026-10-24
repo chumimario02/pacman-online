@@ -13,6 +13,7 @@ var frightened := false
 var release := 0.0
 var house_timer := 0.0
 var dead_timer := 0.0
+var eaten_flash := 0.0
 var anim := 0.0
 var phase := 0.0
 
@@ -93,6 +94,7 @@ func eaten_by_player() -> void:
 	state = "eaten"
 	frightened = false
 	dead_timer = 0.0
+	eaten_flash = 0.25
 	# El jugador no puede desviar los ojos: siempre vuelven a la casa.
 	desired_dir = null
 
@@ -207,6 +209,8 @@ func _choose() -> void:
 
 func update_ghost(dt: float) -> void:
 	anim += dt
+	if eaten_flash > 0.0:
+		eaten_flash = maxf(0.0, eaten_flash - dt)
 	if state == "house":
 		house_timer += dt
 		if house_timer >= release:
@@ -294,12 +298,15 @@ func _near_pac() -> bool:
 func sync_visual() -> void:
 	position = pos()
 	if state in ["eaten", "dead"]:
+		if eaten_flash > 0.0:
+			_set_anim("flash", 0)
+			return
 		var eyes_name := "eyes_up"
 		if dir != null:
 			eyes_name = "eyes_" + _dir_name(dir)
 		_set_anim(eyes_name, 0)
 	elif frightened and state in ["normal", "leaving", "house"]:
-		var flash: bool = _near_pac() or (game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0)
+		var flash: bool = game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0
 		_set_anim("flash" if flash else "fright", int(anim / 0.20) % 2)
 	else:
 		_set_anim(_dir_name(dir), int(anim / 0.14) % 2)
@@ -307,6 +314,7 @@ func sync_visual() -> void:
 func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 		ghost_state: String, is_frightened: bool, net_animation: float,
 		is_visible: bool, p_id: String) -> void:
+	var prev_state := state
 	var target_dir = null
 	if dir_name != "":
 		target_dir = Config.DIRS.get(dir_name, null)
@@ -318,6 +326,8 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 	dir = target_dir
 	progress = prog
 	state = ghost_state
+	if ghost_state == "eaten" and prev_state != "eaten":
+		eaten_flash = 0.25
 	frightened = is_frightened
 	net_state = ghost_state
 	net_frightened = is_frightened
@@ -331,12 +341,15 @@ func apply_network(tile_ref: Vector2i, dir_name: String, prog: float,
 	if net_prev_pos.distance_to(net_target_pos) > Config.MAZE_W * 0.5:
 		net_prev_pos = net_target_pos
 	if state in ["eaten", "dead"]:
+		if eaten_flash > 0.0:
+			_set_anim("flash", 0)
+			return
 		var eyes_name := "eyes_up"
 		if dir != null:
 			eyes_name = "eyes_" + _dir_name(dir)
 		_set_anim(eyes_name, 0)
 	elif frightened and state in ["normal", "leaving", "house"]:
-		var flash: bool = _near_pac() or (game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0)
+		var flash: bool = game.frightened and game.fright_timer < 2.0 and int(game.time * 9.0) % 2 == 0
 		_set_anim("flash" if flash else "fright", int(net_anim / 0.20) % 2)
 	else:
 		_set_anim(_dir_name(dir), int(net_anim / 0.14) % 2)
