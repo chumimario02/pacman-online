@@ -70,14 +70,14 @@ static func _ghost_body(img: Image, color: Color, frame: int) -> void:
 			if y <= 34 and (dx * dx + dy * dy <= 28.0 * 28.0):
 				inside = true
 			# Body
-			elif y > 24 and y <= 40 and abs(dx) <= 28.0:
+			elif y > 24 and y <= 44 and abs(dx) <= 28.0:
 				inside = true
 			# Triangular skirt (bigger legs)
-			elif y > 40 and y <= 62 and abs(dx) <= 28.0:
+			elif y > 44 and y <= 58 and abs(dx) <= 28.0:
 				var tri := fmod(float(x) + frame * 6.0, 14.0)
 				if tri > 7.0:
 					tri = 14.0 - tri
-				var maxy := 40.0 + tri * 2.4
+				var maxy := 44.0 + tri
 				if float(y) <= maxy:
 					inside = true
 			if inside:
