@@ -78,6 +78,7 @@ var use_hd_sprites := false
 var nostalgia_mode := false
 var last_input_seq: Dictionary = {}
 var zoomed := false
+var zoom_base_pos := Vector2.ZERO
 var online_role := "offline"   # offline | host | client
 var online_mode := MODE_TEAM
 var roster: Array = []
@@ -431,11 +432,13 @@ func _set_zoom(enabled: bool) -> void:
 		var s := minf((float(Config.WIDTH) - 60.0) / frame_w, (float(Config.HEIGHT) - 60.0) / frame_h)
 		world.scale = Vector2(s, s)
 		var target := Vector2((float(Config.WIDTH) - frame_w * s) * 0.5, (float(Config.HEIGHT) - frame_h * s) * 0.5)
-		world.position = target + Vector2(9.0, 9.0) * s
+		zoom_base_pos = target + Vector2(9.0, 9.0) * s
+		world.position = zoom_base_pos
 		if hud:
 			hud.visible = false
 	else:
 		world.scale = Vector2.ONE
+		zoom_base_pos = Vector2.ZERO
 		world.position = Vector2(Config.MAZE_X, Config.MAZE_Y)
 		if hud and state != Config.LOBBY:
 			hud.visible = true
@@ -1241,7 +1244,7 @@ func _animate_death(p) -> void:
 		p.modulate.a = 1.0 - prog * 0.55
 
 func _sync_visuals() -> void:
-	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y) + _shake_offset()
+	world.position = (zoom_base_pos if zoomed else Vector2(Config.MAZE_X, Config.MAZE_Y)) + _shake_offset()
 
 	for p in pacs:
 		if p == null or not is_instance_valid(p):
@@ -1266,7 +1269,7 @@ func _sync_visuals() -> void:
 	_sync_fruit()
 
 func _sync_visuals_client() -> void:
-	world.position = Vector2(Config.MAZE_X, Config.MAZE_Y) + _shake_offset()
+	world.position = (zoom_base_pos if zoomed else Vector2(Config.MAZE_X, Config.MAZE_Y)) + _shake_offset()
 	for p in pacs:
 		if p == null or not is_instance_valid(p):
 			continue
