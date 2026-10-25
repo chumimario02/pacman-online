@@ -102,7 +102,7 @@ func update_pac(dt: float) -> void:
 		var nxt = maze.neighbor(tile, dir)
 		if nxt != null:
 			tile = nxt
-			progress = Config.TILE - progress
+			progress = maze.step_for(dir) - progress
 			dir = desired
 
 	var remaining := move_speed * dt
@@ -113,7 +113,7 @@ func update_pac(dt: float) -> void:
 			_choose()
 			if dir == null:
 				break
-		var left := Config.TILE - progress
+		var left: float = maze.step_for(dir) - progress
 		if left <= 1e-9:
 			_arrive()
 			continue
@@ -121,7 +121,7 @@ func update_pac(dt: float) -> void:
 		progress += step
 		remaining -= step
 		moving = true
-		if progress >= Config.TILE - 1e-9:
+		if progress >= maze.step_for(dir) - 1e-9:
 			_arrive()
 	if moving:
 		anim += dt

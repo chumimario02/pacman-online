@@ -125,7 +125,7 @@ func reverse() -> void:
 	var nxt = maze.neighbor(tile, dir)
 	if nxt != null:
 		tile = nxt
-		progress = Config.TILE - progress
+		progress = maze.step_for(dir) - progress
 		dir = opp
 
 func _allow_house() -> bool:
@@ -257,14 +257,14 @@ func update_ghost(dt: float) -> void:
 			_choose()
 			if dir == null:
 				break
-		var left := Config.TILE - progress
+		var left: float = maze.step_for(dir) - progress
 		if left <= 1e-9:
 			_arrive()
 			continue
 		var step := minf(remaining, left)
 		progress += step
 		remaining -= step
-		if progress >= Config.TILE - 1e-9:
+		if progress >= maze.step_for(dir) - 1e-9:
 			_arrive()
 
 func _arrive() -> void:

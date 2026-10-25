@@ -77,10 +77,10 @@ func _build_classic() -> void:
 func _build_remake() -> void:
 	cols = Config.REMAKE_COLS
 	rows = Config.REMAKE_ROWS
-	tile_w = Config.TILE
-	tile_h = Config.TILE
+	tile_w = Config.REMAKE_TILE
+	tile_h = Config.REMAKE_TILE
 	tunnel_rows = Config.REMAKE_TUNNEL_ROWS.duplicate()
-	vertical_tunnel_cols = [27]
+	vertical_tunnel_cols = []
 	for row in Config.REMAKE_LAYOUT:
 		var line: Array = []
 		for ch in row:
@@ -101,11 +101,13 @@ func _build_remake() -> void:
 		if is_walkable(tile):
 			base_pellets[tile] = 50
 
-	# Pellets en todas las celdas alcanzables (centrados en cada hueco).
+	# Pellets cada 16 px sobre el camino (no en cada celda de 8 px).
 	for y in range(rows):
 		for x in range(cols):
 			var tile := Vector2i(x, y)
 			if not reachable.has(tile):
+				continue
+			if (x + y) % 2 != 0:
 				continue
 			if not base_pellets.has(tile):
 				base_pellets[tile] = 10
@@ -199,6 +201,11 @@ func center(tile: Vector2i) -> Vector2:
 
 func pixel_size() -> Vector2:
 	return Vector2(cols * tile_w, rows * tile_h)
+
+func step_for(direction) -> float:
+	if direction == null:
+		return tile_w
+	return tile_w if int(direction.x) != 0 else tile_h
 
 func reset() -> void:
 	pellets = base_pellets.duplicate()
