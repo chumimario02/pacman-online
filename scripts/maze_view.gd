@@ -37,11 +37,11 @@ func _draw() -> void:
 		if value >= 50:
 			if power_glow_texture:
 				var a := 0.18 + 0.12 * (0.5 + 0.5 * sin(game.time * 5.0))
-				var gs := 32.0 if remake else 44.0
+				var gs := 48.0 if remake else 44.0
 				draw_texture_rect(power_glow_texture, Rect2(p - Vector2(gs, gs) * 0.5, Vector2(gs, gs)), false, Color(1, 1, 1, a))
 				draw_texture_rect(power_glow_texture, Rect2(p - Vector2(gs, gs) * 0.5, Vector2(gs, gs)), false, Color(1, 1, 1, a * 0.7))
 			if power_texture:
-				var ps := 16.0
+				var ps := 24.0 if remake else 16.0
 				draw_texture_rect(power_texture, Rect2(p - Vector2(ps, ps) * 0.5, Vector2(ps, ps)), false)
 		else:
 			draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Config.SALMON)

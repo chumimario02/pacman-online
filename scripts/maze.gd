@@ -89,17 +89,32 @@ func _build_remake() -> void:
 		if is_walkable(tile):
 			base_pellets[tile] = 50
 
-	# Pellet solo en el eje del corredor, no en cada celda del mapa.
-	var dist := _wall_distance()
+	# Pellets en todas las celdas alcanzables (centrados en cada hueco).
+	var reachable := _reachable_from(start_tile())
 	for y in range(rows):
 		for x in range(cols):
-			if not grid[y][x]:
-				continue
-			if int(dist[y][x]) < 2:
-				continue
 			var tile := Vector2i(x, y)
+			if not reachable.has(tile):
+				continue
 			if not base_pellets.has(tile):
 				base_pellets[tile] = 10
+
+func _reachable_from(start: Vector2i) -> Dictionary:
+	var seen := {start: true}
+	var q: Array = [start]
+	var head := 0
+	while head < q.size():
+		var cur: Vector2i = q[head]
+		head += 1
+		for d in Config.DIR_ORDER:
+			var nxt = neighbor(cur, d)
+			if nxt == null or seen.has(nxt):
+				continue
+			if not is_walkable(nxt, true):
+				continue
+			seen[nxt] = true
+			q.append(nxt)
+	return seen
 
 func _wall_distance() -> Array:
 	var dist: Array = []
