@@ -18,12 +18,13 @@ func _draw() -> void:
 	if game == null:
 		return
 	var local_id: String = str(game.local_player_id)
+	var tag_y := -12.0 if game.maze_mode == "remake" else -18.0
 	for p in game.pacs:
 		if p == null or not is_instance_valid(p) or not p.active:
 			continue
 		if str(p.player_id) == "" or str(p.player_id) == local_id:
 			continue
-		var pos: Vector2 = p.pos() + Vector2(0.0, -18.0)
+		var pos: Vector2 = p.pos() + Vector2(0.0, tag_y)
 		var col: Color = Config.PAC_COLORS.get(p.color_id, Config.WHITE)
 		_draw_name(str(p.player_name), pos, col)
 	for g in game.ghosts:
@@ -31,7 +32,7 @@ func _draw() -> void:
 			continue
 		if str(g.player_id) == "" or str(g.player_id) == local_id:
 			continue
-		var pos: Vector2 = g.pos() + Vector2(0.0, -18.0)
+		var pos: Vector2 = g.pos() + Vector2(0.0, tag_y)
 		var col: Color = Config.GHOST_COLORS.get(g.ghost_name, Config.WHITE)
 		_draw_name(str(g.player_name), pos, col)
 

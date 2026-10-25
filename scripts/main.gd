@@ -505,6 +505,9 @@ func _apply_maze_mode() -> void:
 func maze_rect() -> Rect2:
 	return Rect2(maze_origin, maze_size)
 
+func _actor_scale() -> float:
+	return 0.45 if maze_mode == "remake" else 1.0
+
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
 	for p in pacs:
@@ -517,6 +520,7 @@ func _spawn_actors() -> void:
 		pac = PacMan.new()
 		pac.name = "PacMan"
 		pac.setup(maze, pac_frames, "local", "yellow", maze.start_tile())
+		pac.scale = Vector2(_actor_scale(), _actor_scale())
 		_apply_hd_look(pac)
 		pac.player_name = "TÚ"
 		if old_stats.has("local"):
@@ -540,6 +544,7 @@ func _spawn_actors() -> void:
 			var p := PacMan.new()
 			p.name = "Pac_" + str(e.get("id", idx))
 			p.setup(maze, pac_frames, str(e.get("id", "")), str(e.get("color", "yellow")), spawn)
+			p.scale = Vector2(_actor_scale(), _actor_scale())
 			_apply_hd_look(p)
 			p.player_name = str(e.get("name", "JUGADOR"))
 			p.is_ai = bool(e.get("ai", false))
@@ -565,6 +570,7 @@ func _spawn_actors() -> void:
 		var g := Ghost.new()
 		g.name = n
 		g.setup(self, maze, n, ghost_frames[n])
+		g.scale = Vector2(_actor_scale(), _actor_scale())
 		_apply_hd_look(g)
 		g.z_index = 4
 		var assigned = null

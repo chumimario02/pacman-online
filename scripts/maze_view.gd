@@ -33,13 +33,16 @@ func _draw() -> void:
 	for tile in maze.pellets.keys():
 		var p: Vector2 = maze.center(tile)
 		var value: int = maze.pellets[tile]
+		var remake: bool = game != null and game.maze_mode == "remake"
 		if value >= 50:
 			if power_glow_texture:
 				var a := 0.18 + 0.12 * (0.5 + 0.5 * sin(game.time * 5.0))
-				draw_texture(power_glow_texture, p - Vector2(22, 22), Color(1, 1, 1, a))
-				draw_texture(power_glow_texture, p - Vector2(22, 22), Color(1, 1, 1, a * 0.7))
+				var gs := 24.0 if remake else 44.0
+				draw_texture_rect(power_glow_texture, Rect2(p - Vector2(gs, gs) * 0.5, Vector2(gs, gs)), false, Color(1, 1, 1, a))
+				draw_texture_rect(power_glow_texture, Rect2(p - Vector2(gs, gs) * 0.5, Vector2(gs, gs)), false, Color(1, 1, 1, a * 0.7))
 			if power_texture:
-				draw_texture(power_texture, p - Vector2(8, 8))
+				var ps := 10.0 if remake else 16.0
+				draw_texture_rect(power_texture, Rect2(p - Vector2(ps, ps) * 0.5, Vector2(ps, ps)), false)
 		else:
 			draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Config.SALMON)
 
