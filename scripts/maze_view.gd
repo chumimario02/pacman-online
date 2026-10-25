@@ -5,6 +5,7 @@ var game
 var maze
 var maze_texture: Texture2D
 var maze_remake_texture: Texture2D
+var maze_square_texture: Texture2D
 var power_texture: Texture2D
 var power_glow_texture: Texture2D
 var hide_frame := false
@@ -12,6 +13,7 @@ var hide_frame := false
 func _ready() -> void:
 	maze_texture = load("res://assets/maze_bg.png")
 	maze_remake_texture = load("res://assets/maze_remake.png")
+	maze_square_texture = load("res://assets/maze_remake_square.png")
 	power_texture = load("res://assets/power.png")
 	power_glow_texture = load("res://assets/power_glow.png")
 
@@ -22,8 +24,10 @@ func _draw() -> void:
 	if game == null or maze == null:
 		return
 	if maze_texture:
-		if game != null and game.maze_mode == "remake" and maze_remake_texture:
-			# Nivel original de mmaze new.png; las colisiones siguen siendo rectangulares.
+		if game != null and game.maze_mode == "remake" and maze_square_texture:
+			# Paredes rectangulares con esquinas rectas: coinciden con las colisiones.
+			draw_texture(maze_square_texture, Vector2.ZERO)
+		elif game != null and game.maze_mode == "remake" and maze_remake_texture:
 			draw_texture_rect_region(maze_remake_texture,
 				Rect2(0, 0, Config.REMAKE_W, Config.REMAKE_H),
 				Rect2(80, 88, Config.REMAKE_W, Config.REMAKE_H))
