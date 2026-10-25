@@ -210,9 +210,9 @@ static var REMAKE_DOOR_TILES := []
 static var REMAKE_TUNNEL_ROWS := [17]
 static var REMAKE_GHOST_START := {
 	"blinky": REMAKE_HOUSE_EXIT,
-	"pinky": REMAKE_HOUSE_CENTER,
-	"inky": Vector2i(25, 17),
-	"clyde": Vector2i(29, 17),
+	"pinky": Vector2i(27, 15),
+	"inky": Vector2i(27, 16),
+	"clyde": REMAKE_HOUSE_CENTER,
 }
 static var REMAKE_GHOST_RELEASE := {"blinky": 0.0, "pinky": 1.2, "inky": 3.0, "clyde": 5.0}
 static var REMAKE_PAC_STARTS := [

@@ -87,13 +87,21 @@ func _build_remake() -> void:
 			line.append(ch == ".")
 		grid.append(line)
 
+	# Rellena huecos internos de las paredes: las celdas a las que Pac-Man
+	# no puede llegar se convierten en pared para que los bloques queden
+	# rectangulares y no parezcan curvas.
+	var reachable := _reachable_from(start_tile())
+	for y in range(rows):
+		for x in range(cols):
+			if grid[y][x] and not reachable.has(Vector2i(x, y)):
+				grid[y][x] = false
+
 	# Sin casa cerrada: los fantasmas salen del corredor central.
 	for tile in Config.REMAKE_POWER_PELLETS:
 		if is_walkable(tile):
 			base_pellets[tile] = 50
 
 	# Pellets en todas las celdas alcanzables (centrados en cada hueco).
-	var reachable := _reachable_from(start_tile())
 	for y in range(rows):
 		for x in range(cols):
 			var tile := Vector2i(x, y)
