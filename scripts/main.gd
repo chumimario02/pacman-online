@@ -506,10 +506,14 @@ func maze_rect() -> Rect2:
 	return Rect2(maze_origin, maze_size)
 
 func _pac_scale() -> float:
-	return 16.0 / 36.0 if maze_mode == "remake" else 1.0
+	# El cuerpo visible de Pac-Man ocupa ~30 px dentro del frame de 36 px.
+	# 30 * 0.54 = 16 px reales.
+	return 0.54 if maze_mode == "remake" else 1.0
 
 func _ghost_scale() -> float:
-	return 16.0 / 31.5 if maze_mode == "remake" else 1.0
+	# El cuerpo visible del fantasma ocupa ~26 px dentro del frame de 36 px.
+	# 26 * 0.62 = 16 px reales.
+	return 0.62 if maze_mode == "remake" else 1.0
 
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
