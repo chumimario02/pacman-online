@@ -216,7 +216,7 @@ static var REMAKE_GHOST_START := {
 }
 static var REMAKE_GHOST_RELEASE := {"blinky": 0.0, "pinky": 1.2, "inky": 3.0, "clyde": 5.0}
 static var REMAKE_PAC_STARTS := [
-	Vector2i(27, 32), Vector2i(20, 32), Vector2i(34, 32), Vector2i(5, 27),
+	Vector2i(27, 28), Vector2i(22, 28), Vector2i(32, 28), Vector2i(13, 27),
 ]
 static var REMAKE_SCATTER_TARGETS := {
 	"blinky": Vector2i(54, -3),
