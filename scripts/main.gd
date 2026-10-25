@@ -506,12 +506,10 @@ func maze_rect() -> Rect2:
 	return Rect2(maze_origin, maze_size)
 
 func _pac_scale() -> float:
-	# Pac-Man: justo el ancho de una celda (16 px) para pasar los huecos.
-	return 16.0 / 32.0 if maze_mode == "remake" else 1.0
+	return 1.0
 
 func _ghost_scale() -> float:
-	# Fantasmas casi a tamano normal, sin quedar como hormigas.
-	return 0.8 if maze_mode == "remake" else 1.0
+	return 1.0
 
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
