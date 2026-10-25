@@ -101,16 +101,33 @@ func _build_remake() -> void:
 		if is_walkable(tile):
 			base_pellets[tile] = 50
 
-	# Pellets cada 16 px sobre el camino (no en cada celda de 8 px).
+	# Pellets centrados en el eje del pasillo y separados 2 celdas.
+	var dist := _wall_distance()
+	var candidates: Array = []
 	for y in range(rows):
 		for x in range(cols):
 			var tile := Vector2i(x, y)
-			if not reachable.has(tile):
-				continue
-			if (x + y) % 2 != 0:
-				continue
-			if not base_pellets.has(tile):
-				base_pellets[tile] = 10
+			if reachable.has(tile) and not base_pellets.has(tile):
+				candidates.append(tile)
+	candidates.sort_custom(func(a, b):
+		var da: int = int(dist[a.y][a.x])
+		var db: int = int(dist[b.y][b.x])
+		if da != db:
+			return da > db
+		if a.y != b.y:
+			return a.y < b.y
+		return a.x < b.x)
+	var chosen: Array = []
+	for tile in candidates:
+		var ok := true
+		for other in chosen:
+			if (tile.x - other.x) * (tile.x - other.x) + (tile.y - other.y) * (tile.y - other.y) < 4:
+				ok = false
+				break
+		if ok:
+			chosen.append(tile)
+	for tile in chosen:
+		base_pellets[tile] = 10
 
 func _reachable_from(start: Vector2i) -> Dictionary:
 	var seen := {start: true}
