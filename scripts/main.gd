@@ -506,10 +506,10 @@ func maze_rect() -> Rect2:
 	return Rect2(maze_origin, maze_size)
 
 func _pac_scale() -> float:
-	return 17.0 / 32.0 if maze_mode == "remake" else 1.0
+	return 18.0 / 36.0 if maze_mode == "remake" else 1.0
 
 func _ghost_scale() -> float:
-	return 17.0 / 36.0 if maze_mode == "remake" else 1.0
+	return 18.0 / 31.5 if maze_mode == "remake" else 1.0
 
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
