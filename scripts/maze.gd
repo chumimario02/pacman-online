@@ -15,6 +15,7 @@ var rows := Config.ROWS
 var tile_w := Config.TILE
 var tile_h := Config.TILE
 var tunnel_rows: Array = [14]
+var vertical_tunnel_cols: Array = []
 
 func _init() -> void:
 	set_mode("classic")
@@ -42,6 +43,7 @@ func _build_classic() -> void:
 	tile_w = Config.TILE
 	tile_h = Config.TILE
 	tunnel_rows = [14]
+	vertical_tunnel_cols = []
 	for row in Config.MAZE_LAYOUT:
 		var line: Array = []
 		for ch in row:
@@ -78,6 +80,7 @@ func _build_remake() -> void:
 	tile_w = Config.TILE
 	tile_h = Config.TILE
 	tunnel_rows = Config.REMAKE_TUNNEL_ROWS.duplicate()
+	vertical_tunnel_cols = [27]
 	for row in Config.REMAKE_LAYOUT:
 		var line: Array = []
 		for ch in row:
@@ -158,6 +161,11 @@ func neighbor(tile: Vector2i, direction):
 			x = cols - 1
 		elif x >= cols:
 			x = 0
+	if vertical_tunnel_cols.has(x):
+		if y < 0:
+			y = rows - 1
+		elif y >= rows:
+			y = 0
 	if x >= 0 and x < cols and y >= 0 and y < rows:
 		return Vector2i(x, y)
 	return null
