@@ -80,7 +80,7 @@ func _build_remake() -> void:
 	tile_w = Config.TILE
 	tile_h = Config.TILE
 	tunnel_rows = Config.REMAKE_TUNNEL_ROWS.duplicate()
-	vertical_tunnel_cols = [26, 27]
+	vertical_tunnel_cols = [27]
 	for row in Config.REMAKE_LAYOUT:
 		var line: Array = []
 		for ch in row:

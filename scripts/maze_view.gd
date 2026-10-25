@@ -11,7 +11,7 @@ var hide_frame := false
 
 func _ready() -> void:
 	maze_texture = load("res://assets/maze_bg.png")
-	maze_remake_texture = load("res://assets/maze_remake_curved.png")
+	maze_remake_texture = load("res://assets/maze_remake.png")
 	power_texture = load("res://assets/power.png")
 	power_glow_texture = load("res://assets/power_glow.png")
 
@@ -23,8 +23,10 @@ func _draw() -> void:
 		return
 	if maze_texture:
 		if game != null and game.maze_mode == "remake" and maze_remake_texture:
-			# Dibujo curvo, colisiones rectangulares internas.
-			draw_texture(maze_remake_texture, Vector2.ZERO)
+			# Imagen curva original; las colisiones internas siguen siendo rectangulares.
+			draw_texture_rect_region(maze_remake_texture,
+				Rect2(0, 0, Config.REMAKE_W, Config.REMAKE_H),
+				Rect2(80, 88, Config.REMAKE_W, Config.REMAKE_H))
 		else:
 			draw_texture(maze_texture, Vector2.ZERO)
 
