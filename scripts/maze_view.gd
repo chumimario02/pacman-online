@@ -5,6 +5,7 @@ var game
 var maze
 var maze_texture: Texture2D
 var maze_remake_texture: Texture2D
+var maze_square_texture: Texture2D
 var power_texture: Texture2D
 var power_glow_texture: Texture2D
 var hide_frame := false
@@ -12,6 +13,7 @@ var hide_frame := false
 func _ready() -> void:
 	maze_texture = load("res://assets/maze_bg.png")
 	maze_remake_texture = load("res://assets/maze_remake.png")
+	maze_square_texture = load("res://assets/maze_remake_square.png")
 	power_texture = load("res://assets/power.png")
 	power_glow_texture = load("res://assets/power_glow.png")
 
@@ -22,8 +24,10 @@ func _draw() -> void:
 	if game == null or maze == null:
 		return
 	if maze_texture:
-		if game != null and game.maze_mode == "remake" and maze_remake_texture:
-			# El mapa nuevo se dibuja 1:1 desde su recuadro real (880x544).
+		if game != null and game.maze_mode == "remake" and maze_square_texture:
+			# Mapa cuadrado 1:1: cada celda de colision es un bloque real.
+			draw_texture(maze_square_texture, Vector2.ZERO)
+		elif game != null and game.maze_mode == "remake" and maze_remake_texture:
 			draw_texture_rect_region(maze_remake_texture,
 				Rect2(0, 0, Config.REMAKE_W, Config.REMAKE_H),
 				Rect2(80, 88, Config.REMAKE_W, Config.REMAKE_H))
@@ -37,11 +41,11 @@ func _draw() -> void:
 		if value >= 50:
 			if power_glow_texture:
 				var a := 0.18 + 0.12 * (0.5 + 0.5 * sin(game.time * 5.0))
-				var gs := 24.0 if remake else 44.0
+				var gs := 32.0 if remake else 44.0
 				draw_texture_rect(power_glow_texture, Rect2(p - Vector2(gs, gs) * 0.5, Vector2(gs, gs)), false, Color(1, 1, 1, a))
 				draw_texture_rect(power_glow_texture, Rect2(p - Vector2(gs, gs) * 0.5, Vector2(gs, gs)), false, Color(1, 1, 1, a * 0.7))
 			if power_texture:
-				var ps := 10.0 if remake else 16.0
+				var ps := 16.0
 				draw_texture_rect(power_texture, Rect2(p - Vector2(ps, ps) * 0.5, Vector2(ps, ps)), false)
 		else:
 			draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), Config.SALMON)

@@ -18,7 +18,7 @@ func _draw() -> void:
 	if game == null:
 		return
 	var local_id: String = str(game.local_player_id)
-	var tag_y := -12.0 if game.maze_mode == "remake" else -18.0
+	var tag_y := -18.0
 	for p in game.pacs:
 		if p == null or not is_instance_valid(p) or not p.active:
 			continue

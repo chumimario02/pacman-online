@@ -506,7 +506,7 @@ func maze_rect() -> Rect2:
 	return Rect2(maze_origin, maze_size)
 
 func _actor_scale() -> float:
-	return 0.45 if maze_mode == "remake" else 1.0
+	return 1.0
 
 func _spawn_actors() -> void:
 	var old_stats: Dictionary = {}
